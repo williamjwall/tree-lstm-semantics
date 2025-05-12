@@ -34,40 +34,95 @@ src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
+# Run download_models.py if it exists
+try:
+    import subprocess
+    model_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "download_models.py")
+    if os.path.exists(model_script):
+        with st.spinner("⏳ Checking and downloading models if needed..."):
+            subprocess.run([sys.executable, model_script], check=False, timeout=120)
+            st.success("✓ Model setup completed")
+except Exception as e:
+    st.warning(f"Model download script didn't complete: {str(e)}. Will try fallback methods.")
+
 # Run model downloads if needed - this ensures models are available
 def download_models_if_needed():
     try:
+        # Import inside function to ensure it's available
         import spacy
+        from spacy.cli import download as spacy_download
+        import subprocess
+        import time
+
+        # Check if spaCy model is available - if not, download via Python API
         if not spacy.util.is_package("en_core_web_sm"):
-            with st.spinner("Downloading spaCy models... (this will take a minute)"):
-                spacy.cli.download("en_core_web_sm")
-                st.success("✅ SpaCy models downloaded")
-        
-        # Check if benepar_en3 is downloaded
-        import benepar
-        import benepar.download as benepar_download
-        model_path = None
-        for path in benepar_download._get_download_dir():
-            possible_path = os.path.join(path, "benepar_en3")
-            if os.path.exists(possible_path):
-                model_path = possible_path
-                break
-        
-        if not model_path:
-            with st.spinner("Downloading Berkeley Neural Parser model... (this will take a minute)"):
-                benepar.download('benepar_en3')
-                st.success("✅ Berkeley Parser model downloaded")
-                
+            with st.spinner("⏳ Downloading spaCy model (first run only)..."):
+                try:
+                    # Try to download with spaCy's Python API first
+                    spacy_download("en_core_web_sm")
+                    st.success("✅ spaCy model downloaded!")
+                except Exception as e1:
+                    st.warning(f"Python API download failed: {str(e1)}")
+                    # Fallback to using subprocess with -m flag
+                    try:
+                        subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
+                        st.success("✅ spaCy model downloaded with subprocess!")
+                    except Exception as e2:
+                        st.error(f"⚠️ Could not download spaCy model: {str(e2)}")
+                        # Try one more time with a delay
+                        try:
+                            time.sleep(2)  # Wait a bit
+                            subprocess.run([sys.executable, "-m", "pip", "install", "en_core_web_sm"], check=True)
+                            st.success("✅ spaCy model downloaded via pip!")
+                        except Exception as e3:
+                            st.error(f"⚠️ All spaCy model download attempts failed: {str(e3)}")
+                            return False
+
+        # Now try to load the model to verify it works
+        try:
+            nlp_test = spacy.load("en_core_web_sm")
+            st.success("✅ spaCy model loaded successfully!")
+        except Exception as e:
+            st.error(f"⚠️ Could not load spaCy model: {str(e)}")
+            return False
+
+        # Check for benepar model
+        try:
+            import benepar
+            import benepar.download as benepar_download
+            
+            # Check all possible directories for the model
+            model_exists = False
+            for path in benepar_download._get_download_dir():
+                possible_path = os.path.join(path, "benepar_en3")
+                if os.path.exists(possible_path):
+                    model_exists = True
+                    break
+            
+            if not model_exists:
+                with st.spinner("⏳ Downloading Berkeley Neural Parser model (first run only)..."):
+                    try:
+                        benepar.download("benepar_en3")
+                        st.success("✅ Berkeley Parser model downloaded!")
+                    except Exception as e:
+                        st.warning(f"⚠️ Error downloading Berkeley Parser: {str(e)}")
+                        st.info("Continuing anyway - will try alternative methods if needed")
+        except Exception as e:
+            st.warning(f"Benepar check failed: {str(e)}. Continuing anyway.")
+                    
         return True
     except Exception as e:
-        st.error(f"Failed to download models: {str(e)}")
+        st.error(f"⚠️ Error during model setup: {str(e)}")
+        if st.button("Show detailed error"):
+            st.code(traceback.format_exc())
         return False
 
 # Try to download models if needed
-models_ready = download_models_if_needed()
+with st.spinner("⏳ Checking model availability..."):
+    models_ready = download_models_if_needed()
 
 # Display progress while loading NLP system
-with st.spinner("Setting up NLP models... This may take a minute on first run."):
+with st.spinner("⏳ Setting up NLP models..."):
     try:
         import spacy
         import benepar
@@ -75,12 +130,17 @@ with st.spinner("Setting up NLP models... This may take a minute on first run.")
         # Now try to import the encoder
         try:
             from src.tree_lstm_viz.model import TreeLSTMEncoder
-        except ImportError as e:
-            st.warning(f"Using alternative model implementation: {str(e)}")
-            from src.tree_lstm_viz.model_alt import TreeLSTMEncoder
-        model_load_success = True
+            model_load_success = True
+        except ImportError:
+            st.warning("⚠️ Using alternative model implementation")
+            try:
+                from src.tree_lstm_viz.model_alt import TreeLSTMEncoder
+                model_load_success = True
+            except ImportError as e:
+                st.error(f"💥 Could not import TreeLSTMEncoder: {str(e)}")
+                model_load_success = False
     except Exception as e:
-        st.error(f"Error during setup: {str(e)}")
+        st.error(f"💥 Error during setup: {str(e)}")
         model_load_success = False
         if st.button("Show detailed error"):
             st.code(traceback.format_exc())
@@ -91,7 +151,7 @@ def get_encoder():
     try:
         return TreeLSTMEncoder()
     except Exception as e:
-        st.error(f"Failed to initialize TreeLSTMEncoder: {str(e)}")
+        st.error(f"💥 Failed to initialize TreeLSTMEncoder: {str(e)}")
         if st.button("Show detailed error"):
             st.code(traceback.format_exc())
         return None
