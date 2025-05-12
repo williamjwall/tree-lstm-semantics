@@ -81,4 +81,8 @@ coverage.xml
 
 # Logs
 logs/
-*.log 
+*.log
+
+# Local development settings
+.env
+.env.local 
