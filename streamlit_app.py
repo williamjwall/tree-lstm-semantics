@@ -12,18 +12,15 @@ import plotly.express as px
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity
 import traceback
+import time
+import warnings
+warnings.filterwarnings('ignore')
+
 matplotlib.use('Agg')  # Use non-interactive backend
 
 # Ensure we're using CPU only and avoid CUDA issues
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 torch.cuda.is_available = lambda: False
-
-try:
-    from src.tree_lstm_viz.model import TreeLSTMEncoder
-except ImportError as e:
-    st.error(f"Import error: {e}")
-    st.info("Make sure to run setup.sh first and activate the virtual environment")
-    st.stop()
 
 # Set page config
 st.set_page_config(
@@ -32,6 +29,45 @@ st.set_page_config(
     layout="wide"
 )
 
+# Add src directory to path if needed
+src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+# Display progress while loading models
+with st.spinner("Setting up NLP models... This may take a minute on first run."):
+    try:
+        import spacy
+        import benepar
+        
+        # Ensure models are downloaded
+        if not spacy.util.is_package("en_core_web_sm"):
+            st.info("Downloading spaCy model... (this happens only once)")
+            spacy.cli.download("en_core_web_sm")
+        
+        # Check if benepar_en3 is downloaded
+        try:
+            import benepar.download as benepar_download
+            if not any(os.path.exists(os.path.join(p, "benepar_en3")) for p in benepar_download._get_download_dir()):
+                st.info("Downloading Berkeley Neural Parser model... (this happens only once)")
+                benepar.download('benepar_en3')
+        except Exception as e:
+            st.warning(f"Note about parser model: {str(e)}")
+            # Continue anyway, we might have the model already
+    
+        # Now try to import the encoder
+        try:
+            from src.tree_lstm_viz.model import TreeLSTMEncoder
+        except ImportError as e:
+            st.warning(f"Using alternative model implementation: {str(e)}")
+            from src.tree_lstm_viz.model_alt import TreeLSTMEncoder
+        model_load_success = True
+    except Exception as e:
+        st.error(f"Error during setup: {str(e)}")
+        model_load_success = False
+        if st.button("Show detailed error"):
+            st.code(traceback.format_exc())
+
 # Initialize encoder
 @st.cache_resource
 def get_encoder():
@@ -39,7 +75,17 @@ def get_encoder():
         return TreeLSTMEncoder()
     except Exception as e:
         st.error(f"Failed to initialize TreeLSTMEncoder: {str(e)}")
+        if st.button("Show detailed error"):
+            st.code(traceback.format_exc())
         return None
+
+# Only proceed if models loaded successfully
+if model_load_success:
+    encoder = get_encoder()
+else:
+    st.warning("⚠️ Failed to set up required models. The app may not function correctly.")
+    st.info("Try refreshing the page or check that all dependencies are installed.")
+    encoder = None
 
 # Helper function to generate color gradient based on value
 def get_color(val, min_val, max_val):
@@ -54,6 +100,10 @@ def get_color(val, min_val, max_val):
     g = min(100, int(100 - abs(normalized - 0.5) * 200))
     
     return f"#{r:02x}{g:02x}{b:02x}"
+
+# Add resource constraints for Streamlit Cloud
+MAX_SENTENCE_LENGTH = 60
+MAX_VECTOR_DISPLAY = 20
 
 # Title and description
 st.title("Tree-LSTM Semantic Visualizer")
@@ -261,11 +311,11 @@ sentence = st.text_input(
     help="The sentence will be parsed into a constituency tree"
 )
 
-# Get encoder
-encoder = get_encoder()
-if encoder is None:
-    st.error("Failed to initialize encoder. Please check the console for errors.")
-    st.stop()
+# Check if sentence is too long
+if sentence and len(sentence.split()) > MAX_SENTENCE_LENGTH:
+    st.warning(f"⚠️ Sentence is too long ({len(sentence.split())} words). Please use {MAX_SENTENCE_LENGTH} words or fewer to avoid memory issues.")
+    sentence = " ".join(sentence.split()[:MAX_SENTENCE_LENGTH])
+    st.info(f"Truncated to: '{sentence}...'")
 
 if sentence:
     try:
