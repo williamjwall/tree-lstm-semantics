@@ -34,27 +34,44 @@ src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
-# Display progress while loading models
+# Run model downloads if needed - this ensures models are available
+def download_models_if_needed():
+    try:
+        import spacy
+        if not spacy.util.is_package("en_core_web_sm"):
+            with st.spinner("Downloading spaCy models... (this will take a minute)"):
+                spacy.cli.download("en_core_web_sm")
+                st.success("✅ SpaCy models downloaded")
+        
+        # Check if benepar_en3 is downloaded
+        import benepar
+        import benepar.download as benepar_download
+        model_path = None
+        for path in benepar_download._get_download_dir():
+            possible_path = os.path.join(path, "benepar_en3")
+            if os.path.exists(possible_path):
+                model_path = possible_path
+                break
+        
+        if not model_path:
+            with st.spinner("Downloading Berkeley Neural Parser model... (this will take a minute)"):
+                benepar.download('benepar_en3')
+                st.success("✅ Berkeley Parser model downloaded")
+                
+        return True
+    except Exception as e:
+        st.error(f"Failed to download models: {str(e)}")
+        return False
+
+# Try to download models if needed
+models_ready = download_models_if_needed()
+
+# Display progress while loading NLP system
 with st.spinner("Setting up NLP models... This may take a minute on first run."):
     try:
         import spacy
         import benepar
         
-        # Ensure models are downloaded
-        if not spacy.util.is_package("en_core_web_sm"):
-            st.info("Downloading spaCy model... (this happens only once)")
-            spacy.cli.download("en_core_web_sm")
-        
-        # Check if benepar_en3 is downloaded
-        try:
-            import benepar.download as benepar_download
-            if not any(os.path.exists(os.path.join(p, "benepar_en3")) for p in benepar_download._get_download_dir()):
-                st.info("Downloading Berkeley Neural Parser model... (this happens only once)")
-                benepar.download('benepar_en3')
-        except Exception as e:
-            st.warning(f"Note about parser model: {str(e)}")
-            # Continue anyway, we might have the model already
-    
         # Now try to import the encoder
         try:
             from src.tree_lstm_viz.model import TreeLSTMEncoder

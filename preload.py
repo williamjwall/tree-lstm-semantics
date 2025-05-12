@@ -19,7 +19,8 @@ def main():
         import spacy
         if not spacy.util.is_package("en_core_web_sm"):
             print("Downloading spaCy model...")
-            subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
+            spacy.cli.download("en_core_web_sm")
+            print("SpaCy model download completed")
         else:
             print("spaCy model already downloaded")
     except Exception as e:
