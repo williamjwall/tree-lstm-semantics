@@ -18,10 +18,14 @@ st.set_page_config(
     layout="wide"
 )
 
+# Check Python version
+st.sidebar.info(f"Python version: {sys.version}")
+
 # Check for numpy compatibility
 try:
     import numpy as np
     st.sidebar.success(f"NumPy version: {np.__version__}")
+    st.sidebar.info(f"NumPy path: {np.__file__}")
 except ImportError as e:
     st.error(f"Error importing NumPy: {str(e)}")
     st.stop()
@@ -30,7 +34,7 @@ except Exception as e:
     st.warning("Trying to fix NumPy compatibility...")
     try:
         import subprocess
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--force-reinstall", "numpy>=1.26.0"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--force-reinstall", "numpy==1.26.3"])
         import numpy as np
         st.sidebar.success(f"NumPy reinstalled: {np.__version__}")
     except Exception as e2:
@@ -41,10 +45,28 @@ except Exception as e:
 try:
     from matplotlib import pyplot as plt
     import matplotlib
+    st.sidebar.success(f"Matplotlib version: {matplotlib.__version__}")
+    
     import plotly.graph_objects as go
     import plotly.express as px
-    from sklearn.decomposition import PCA
-    from sklearn.metrics.pairwise import cosine_similarity
+    
+    try:
+        from sklearn import __version__ as sklearn_version
+        st.sidebar.success(f"Scikit-learn version: {sklearn_version}")
+        from sklearn.decomposition import PCA
+        from sklearn.metrics.pairwise import cosine_similarity
+    except Exception as e:
+        st.error(f"Error importing scikit-learn: {str(e)}")
+        st.info("Trying to reinstall scikit-learn...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "--force-reinstall", "scikit-learn==1.3.2"])
+            from sklearn import __version__ as sklearn_version
+            st.sidebar.success(f"Scikit-learn reinstalled: {sklearn_version}")
+            from sklearn.decomposition import PCA
+            from sklearn.metrics.pairwise import cosine_similarity
+        except Exception as e2:
+            st.error(f"Failed to fix scikit-learn: {str(e2)}")
+    
     import traceback
     import pandas as pd
 except ImportError as e:
@@ -71,6 +93,7 @@ if src_path not in sys.path:
 def load_nlp_pipeline():
     try:
         import spacy
+        st.sidebar.success(f"spaCy version: {spacy.__version__}")
         
         # Load spaCy model (should be installed via requirements.txt)
         try:
@@ -79,6 +102,7 @@ def load_nlp_pipeline():
             # Add benepar component if available
             try:
                 import benepar
+                st.sidebar.success(f"benepar version: {benepar.__version__}")
                 if "benepar" not in nlp.pipe_names:
                     nlp.add_pipe("benepar", config={"model": "benepar_en3"})
             except Exception as e:
@@ -90,6 +114,7 @@ def load_nlp_pipeline():
             return None
     except Exception as e:
         st.error(f"Error setting up NLP pipeline: {str(e)}")
+        st.info(f"Detailed error: {traceback.format_exc()}")
         return None
 
 # Initialize NLP pipeline
@@ -104,18 +129,40 @@ def get_encoder():
         try:
             from src.tree_lstm_viz.model import TreeLSTMEncoder
             st.sidebar.success("Using standard TreeLSTMEncoder model")
-            return TreeLSTMEncoder()
-        except ImportError:
+            try:
+                encoder = TreeLSTMEncoder()
+                # Test the encoder with a simple sentence to verify it works
+                test_result = encoder.encode("This is a test.")
+                if test_result:
+                    st.sidebar.success("TreeLSTMEncoder initialized successfully")
+                return encoder
+            except Exception as e:
+                st.error(f"Error initializing TreeLSTMEncoder: {str(e)}")
+                st.info(f"Detailed error: {traceback.format_exc()}")
+                raise e
+        except ImportError as e:
             # Try alternative model
             try:
                 from src.tree_lstm_viz.model_alt import TreeLSTMEncoder
                 st.sidebar.info("Using alternative TreeLSTMEncoder implementation")
-                return TreeLSTMEncoder()
+                try:
+                    encoder = TreeLSTMEncoder()
+                    # Test the encoder with a simple sentence
+                    test_result = encoder.encode("This is a test.")
+                    if test_result:
+                        st.sidebar.success("Alternative TreeLSTMEncoder initialized successfully")
+                    return encoder
+                except Exception as e:
+                    st.error(f"Error initializing alternative TreeLSTMEncoder: {str(e)}")
+                    st.info(f"Detailed error: {traceback.format_exc()}")
+                    return None
             except ImportError as e:
                 st.error(f"Could not import TreeLSTMEncoder: {str(e)}")
+                st.info(f"Detailed error: {traceback.format_exc()}")
                 return None
     except Exception as e:
         st.error(f"Failed to initialize TreeLSTMEncoder: {str(e)}")
+        st.info(f"Detailed error: {traceback.format_exc()}")
         st.info("This may be due to binary compatibility issues. Try reloading the page.")
         return None
 
@@ -127,6 +174,14 @@ with st.spinner("Initializing Tree-LSTM model..."):
 if encoder is None:
     st.error("Failed to initialize the Tree-LSTM model. The app may not work correctly.")
     st.info("You can try refreshing the page or contact support.")
+    st.warning("If you're seeing binary compatibility errors, please try the following steps:")
+    st.code("""
+    # In your terminal:
+    pip uninstall -y numpy scikit-learn spacy
+    pip install numpy==1.26.3
+    pip install scikit-learn==1.3.2
+    pip install -r requirements.txt
+    """)
 
 # Helper function to generate color gradient based on value
 def get_color(val, min_val, max_val):

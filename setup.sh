@@ -7,10 +7,13 @@ echo "Running setup.sh"
 # Update pip
 pip install --upgrade pip
 
-# Clean any cached packages
+# Clean any cached packages and remove previous installations
 pip cache purge
+pip uninstall -y numpy scikit-learn spacy
 
-# Install requirements with no-cache to ensure fresh packages
+# Install requirements with exact versions to ensure compatibility
+pip install --no-cache-dir numpy==1.26.3
+pip install --no-cache-dir scikit-learn==1.3.2
 pip install --no-cache-dir -r requirements.txt
 
 # Verify numpy installation
