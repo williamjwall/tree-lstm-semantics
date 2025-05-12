@@ -5,18 +5,19 @@ Script to download the Berkeley Neural Parser model needed for constituency pars
 This is used during Streamlit Cloud deployment to ensure the model is available.
 """
 
-import benepar
 import os
 import sys
 
 def main():
     print("Downloading benepar_en3 model...")
     try:
+        import benepar
         benepar.download('benepar_en3')
         print("Download successful!")
     except Exception as e:
         print(f"Error downloading model: {e}")
-        sys.exit(1)
+        # Don't exit with error code as this might prevent deployment
+        # sys.exit(1)
     
     # Verify download
     try:
@@ -35,11 +36,13 @@ def main():
             print("Warning: Model was downloaded but could not be verified in the paths:")
             for path in download_dir:
                 print(f"  - {path}")
-            sys.exit(1)
+            # Don't exit with error code as this might prevent deployment
+            # sys.exit(1)
     
     except Exception as e:
         print(f"Error verifying model: {e}")
-        sys.exit(1)
+        # Don't exit with error code as this might prevent deployment
+        # sys.exit(1)
 
 if __name__ == "__main__":
     main() 

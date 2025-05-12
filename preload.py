@@ -13,16 +13,14 @@ import time
 def main():
     print("Running preload script for Tree-LSTM Visualizer")
     
-    # Ensure spaCy model is downloaded
+    # Check if spaCy model is available
     print("Checking spaCy model...")
     try:
         import spacy
-        if not spacy.util.is_package("en_core_web_sm"):
-            print("Downloading spaCy model...")
-            spacy.cli.download("en_core_web_sm")
-            print("SpaCy model download completed")
+        if spacy.util.is_package("en_core_web_sm"):
+            print("spaCy model is available")
         else:
-            print("spaCy model already downloaded")
+            print("Warning: en_core_web_sm not found but should be installed via requirements.txt")
     except Exception as e:
         print(f"Error with spaCy model: {e}")
     

@@ -41,31 +41,28 @@ src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
-# Simple function to ensure models are downloaded
+# Simple function to ensure models are loaded
 @st.cache_resource
 def load_nlp_pipeline():
     try:
         import spacy
-        from spacy.cli import download
         
-        # Try to load spaCy model, download if not available
+        # Load spaCy model (should be installed via requirements.txt)
         try:
             nlp = spacy.load("en_core_web_sm")
-        except OSError:
-            with st.spinner("Downloading spaCy model (first run only)..."):
-                # Try to download with --user flag for permissions
-                download("en_core_web_sm", "--user")
-                nlp = spacy.load("en_core_web_sm")
-        
-        # Add benepar component if available
-        try:
-            import benepar
-            if "benepar" not in nlp.pipe_names:
-                nlp.add_pipe("benepar", config={"model": "benepar_en3"})
-        except:
-            st.warning("Berkeley Parser not available. Tree visualization may be limited.")
-        
-        return nlp
+            
+            # Add benepar component if available
+            try:
+                import benepar
+                if "benepar" not in nlp.pipe_names:
+                    nlp.add_pipe("benepar", config={"model": "benepar_en3"})
+            except Exception as e:
+                st.warning(f"Berkeley Parser not available: {str(e)}. Tree visualization may be limited.")
+            
+            return nlp
+        except Exception as e:
+            st.error(f"Error loading spaCy model: {str(e)}")
+            return None
     except Exception as e:
         st.error(f"Error setting up NLP pipeline: {str(e)}")
         return None

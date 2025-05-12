@@ -1,14 +1,16 @@
 #!/bin/bash
 
-echo "Starting setup process..."
+# This script runs during Streamlit Cloud deployment to set up the environment
 
-# Upgrade pip
+echo "Running setup.sh"
+
+# Update pip
 pip install --upgrade pip
 
-# Install dependencies from requirements.txt
+# Install requirements
 pip install -r requirements.txt
 
-echo "Installing spaCy models..."
-python -c "import spacy; spacy.cli.download('en_core_web_sm', '--user')" || echo "Will download models at runtime"
+# Run preload script to download models
+python preload.py
 
-echo "Setup complete. Models will be downloaded at runtime if needed." 
+echo "Setup complete!" 
