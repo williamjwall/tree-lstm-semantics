@@ -1,7 +1,0 @@
-This would be a screenshot showing:
-
-1. The 2D constituency parse tree on the left tab
-2. The 3D semantic visualization on the right tab with nodes colored by semantic value and positioned according to their semantic meaning
-3. The interactive Streamlit UI with sentence input field at the top
-
-The image would demonstrate how the Tree-LSTM creates a compositional semantic representation of a sentence, visualized in both 2D syntax tree form and 3D semantic space. 
