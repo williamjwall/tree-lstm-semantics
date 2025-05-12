@@ -10,13 +10,7 @@ pip install --upgrade pip
 # Clean any cached packages
 pip cache purge
 
-# Force reinstall numpy first to ensure binary compatibility
-pip install --force-reinstall --no-cache-dir numpy==1.24.3
-
-# Install scikit-learn separately to ensure compatibility with numpy
-pip install --force-reinstall --no-cache-dir scikit-learn==1.2.2
-
-# Install other requirements
+# Install requirements with no-cache to ensure fresh packages
 pip install --no-cache-dir -r requirements.txt
 
 # Verify numpy installation

@@ -30,7 +30,7 @@ except Exception as e:
     st.warning("Trying to fix NumPy compatibility...")
     try:
         import subprocess
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--force-reinstall", "numpy==1.24.3"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--force-reinstall", "numpy>=1.26.0"])
         import numpy as np
         st.sidebar.success(f"NumPy reinstalled: {np.__version__}")
     except Exception as e2:
