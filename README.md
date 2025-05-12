@@ -307,3 +307,21 @@ If you use this work in your research, please cite:
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change. 
+
+tree-lstm-generator/
+├── .gitignore
+├── README.md
+├── requirements.txt
+├── setup.py
+├── setup.sh
+├── src/
+│   ├── __init__.py
+│   ├── tree_lstm/
+│   │   └── __init__.py
+│   ├── visualization/
+│   │   └── __init__.py
+│   └── utils/
+│       └── __init__.py
+├── assets/
+├── models/
+└── venv/ 
