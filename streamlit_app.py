@@ -4,21 +4,53 @@ import graphviz
 import torch
 import os
 import sys
-import numpy as np
-from matplotlib import pyplot as plt
-import matplotlib
-import plotly.graph_objects as go
-import plotly.express as px
-from sklearn.decomposition import PCA
-from sklearn.metrics.pairwise import cosine_similarity
-import traceback
-import time
 import warnings
-import pandas as pd
+import time
 
 # Silence all warnings including from transformers
 warnings.filterwarnings('ignore')
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
+
+# Set page config first
+st.set_page_config(
+    page_title="Tree-LSTM Visualizer",
+    page_icon="🌳",
+    layout="wide"
+)
+
+# Check for numpy compatibility
+try:
+    import numpy as np
+    st.sidebar.success(f"NumPy version: {np.__version__}")
+except ImportError as e:
+    st.error(f"Error importing NumPy: {str(e)}")
+    st.stop()
+except Exception as e:
+    st.error(f"NumPy compatibility issue: {str(e)}")
+    st.warning("Trying to fix NumPy compatibility...")
+    try:
+        import subprocess
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--force-reinstall", "numpy==1.24.3"])
+        import numpy as np
+        st.sidebar.success(f"NumPy reinstalled: {np.__version__}")
+    except Exception as e2:
+        st.error(f"Failed to fix NumPy: {str(e2)}")
+        st.stop()
+
+# Now import other dependencies that depend on numpy
+try:
+    from matplotlib import pyplot as plt
+    import matplotlib
+    import plotly.graph_objects as go
+    import plotly.express as px
+    from sklearn.decomposition import PCA
+    from sklearn.metrics.pairwise import cosine_similarity
+    import traceback
+    import pandas as pd
+except ImportError as e:
+    st.error(f"Error importing dependencies: {str(e)}")
+    st.info("Try reloading the page or contact support.")
+    st.stop()
 
 # Patch for transformers warnings - must be done before any transformers import
 try:
@@ -28,13 +60,6 @@ except ImportError:
     pass  # transformers not installed
 
 matplotlib.use('Agg')  # Use non-interactive backend
-
-# Set page config
-st.set_page_config(
-    page_title="Tree-LSTM Visualizer",
-    page_icon="🌳",
-    layout="wide"
-)
 
 # Add src directory to path if needed
 src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
@@ -78,18 +103,30 @@ def get_encoder():
         # First try standard model
         try:
             from src.tree_lstm_viz.model import TreeLSTMEncoder
+            st.sidebar.success("Using standard TreeLSTMEncoder model")
             return TreeLSTMEncoder()
         except ImportError:
             # Try alternative model
-            from src.tree_lstm_viz.model_alt import TreeLSTMEncoder
-            st.info("Using alternative model implementation")
-            return TreeLSTMEncoder() 
+            try:
+                from src.tree_lstm_viz.model_alt import TreeLSTMEncoder
+                st.sidebar.info("Using alternative TreeLSTMEncoder implementation")
+                return TreeLSTMEncoder()
+            except ImportError as e:
+                st.error(f"Could not import TreeLSTMEncoder: {str(e)}")
+                return None
     except Exception as e:
         st.error(f"Failed to initialize TreeLSTMEncoder: {str(e)}")
+        st.info("This may be due to binary compatibility issues. Try reloading the page.")
         return None
 
 # Load the encoder
-encoder = get_encoder()
+with st.spinner("Initializing Tree-LSTM model..."):
+    encoder = get_encoder()
+
+# Check if encoder loaded successfully
+if encoder is None:
+    st.error("Failed to initialize the Tree-LSTM model. The app may not work correctly.")
+    st.info("You can try refreshing the page or contact support.")
 
 # Helper function to generate color gradient based on value
 def get_color(val, min_val, max_val):

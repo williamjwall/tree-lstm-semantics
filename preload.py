@@ -13,6 +13,15 @@ import time
 def main():
     print("Running preload script for Tree-LSTM Visualizer")
     
+    # Check numpy version
+    print("Checking numpy version...")
+    try:
+        import numpy as np
+        print(f"Numpy version: {np.__version__}")
+        print(f"Numpy path: {np.__file__}")
+    except Exception as e:
+        print(f"Error with numpy: {e}")
+    
     # Check if spaCy model is available
     print("Checking spaCy model...")
     try:
