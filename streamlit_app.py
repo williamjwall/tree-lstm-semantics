@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore')
 
 matplotlib.use('Agg')  # Use non-interactive backend
 
-# Ensure we're using CPU only and avoid CUDA issues
+# Ensure we're using CPU only
 os.environ['CUDA_VISIBLE_DEVICES'] = ''
 torch.cuda.is_available = lambda: False
 
@@ -34,135 +34,58 @@ src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
-# Run download_models.py if it exists
-try:
-    import subprocess
-    model_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "download_models.py")
-    if os.path.exists(model_script):
-        with st.spinner("⏳ Checking and downloading models if needed..."):
-            subprocess.run([sys.executable, model_script], check=False, timeout=120)
-            st.success("✓ Model setup completed")
-except Exception as e:
-    st.warning(f"Model download script didn't complete: {str(e)}. Will try fallback methods.")
-
-# Run model downloads if needed - this ensures models are available
-def download_models_if_needed():
+# Simple function to ensure models are downloaded
+@st.cache_resource
+def load_nlp_pipeline():
     try:
-        # Import inside function to ensure it's available
         import spacy
-        from spacy.cli import download as spacy_download
-        import subprocess
-        import time
-
-        # Check if spaCy model is available - if not, download via Python API
-        if not spacy.util.is_package("en_core_web_sm"):
-            with st.spinner("⏳ Downloading spaCy model (first run only)..."):
-                try:
-                    # Try to download with spaCy's Python API first
-                    spacy_download("en_core_web_sm")
-                    st.success("✅ spaCy model downloaded!")
-                except Exception as e1:
-                    st.warning(f"Python API download failed: {str(e1)}")
-                    # Fallback to using subprocess with -m flag
-                    try:
-                        subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
-                        st.success("✅ spaCy model downloaded with subprocess!")
-                    except Exception as e2:
-                        st.error(f"⚠️ Could not download spaCy model: {str(e2)}")
-                        # Try one more time with a delay
-                        try:
-                            time.sleep(2)  # Wait a bit
-                            subprocess.run([sys.executable, "-m", "pip", "install", "en_core_web_sm"], check=True)
-                            st.success("✅ spaCy model downloaded via pip!")
-                        except Exception as e3:
-                            st.error(f"⚠️ All spaCy model download attempts failed: {str(e3)}")
-                            return False
-
-        # Now try to load the model to verify it works
+        from spacy.cli import download
+        
+        # Try to load spaCy model, download if not available
         try:
-            nlp_test = spacy.load("en_core_web_sm")
-            st.success("✅ spaCy model loaded successfully!")
-        except Exception as e:
-            st.error(f"⚠️ Could not load spaCy model: {str(e)}")
-            return False
-
-        # Check for benepar model
+            nlp = spacy.load("en_core_web_sm")
+        except OSError:
+            with st.spinner("Downloading spaCy model (first run only)..."):
+                # Try to download with --user flag for permissions
+                download("en_core_web_sm", "--user")
+                nlp = spacy.load("en_core_web_sm")
+        
+        # Add benepar component if available
         try:
             import benepar
-            import benepar.download as benepar_download
-            
-            # Check all possible directories for the model
-            model_exists = False
-            for path in benepar_download._get_download_dir():
-                possible_path = os.path.join(path, "benepar_en3")
-                if os.path.exists(possible_path):
-                    model_exists = True
-                    break
-            
-            if not model_exists:
-                with st.spinner("⏳ Downloading Berkeley Neural Parser model (first run only)..."):
-                    try:
-                        benepar.download("benepar_en3")
-                        st.success("✅ Berkeley Parser model downloaded!")
-                    except Exception as e:
-                        st.warning(f"⚠️ Error downloading Berkeley Parser: {str(e)}")
-                        st.info("Continuing anyway - will try alternative methods if needed")
-        except Exception as e:
-            st.warning(f"Benepar check failed: {str(e)}. Continuing anyway.")
-                    
-        return True
-    except Exception as e:
-        st.error(f"⚠️ Error during model setup: {str(e)}")
-        if st.button("Show detailed error"):
-            st.code(traceback.format_exc())
-        return False
-
-# Try to download models if needed
-with st.spinner("⏳ Checking model availability..."):
-    models_ready = download_models_if_needed()
-
-# Display progress while loading NLP system
-with st.spinner("⏳ Setting up NLP models..."):
-    try:
-        import spacy
-        import benepar
+            if "benepar" not in nlp.pipe_names:
+                nlp.add_pipe("benepar", config={"model": "benepar_en3"})
+        except:
+            st.warning("Berkeley Parser not available. Tree visualization may be limited.")
         
-        # Now try to import the encoder
-        try:
-            from src.tree_lstm_viz.model import TreeLSTMEncoder
-            model_load_success = True
-        except ImportError:
-            st.warning("⚠️ Using alternative model implementation")
-            try:
-                from src.tree_lstm_viz.model_alt import TreeLSTMEncoder
-                model_load_success = True
-            except ImportError as e:
-                st.error(f"💥 Could not import TreeLSTMEncoder: {str(e)}")
-                model_load_success = False
+        return nlp
     except Exception as e:
-        st.error(f"💥 Error during setup: {str(e)}")
-        model_load_success = False
-        if st.button("Show detailed error"):
-            st.code(traceback.format_exc())
+        st.error(f"Error setting up NLP pipeline: {str(e)}")
+        return None
+
+# Initialize NLP pipeline
+with st.spinner("Setting up NLP models..."):
+    nlp = load_nlp_pipeline()
 
 # Initialize encoder
 @st.cache_resource
 def get_encoder():
     try:
-        return TreeLSTMEncoder()
+        # First try standard model
+        try:
+            from src.tree_lstm_viz.model import TreeLSTMEncoder
+            return TreeLSTMEncoder()
+        except ImportError:
+            # Try alternative model
+            from src.tree_lstm_viz.model_alt import TreeLSTMEncoder
+            st.info("Using alternative model implementation")
+            return TreeLSTMEncoder() 
     except Exception as e:
-        st.error(f"💥 Failed to initialize TreeLSTMEncoder: {str(e)}")
-        if st.button("Show detailed error"):
-            st.code(traceback.format_exc())
+        st.error(f"Failed to initialize TreeLSTMEncoder: {str(e)}")
         return None
 
-# Only proceed if models loaded successfully
-if model_load_success:
-    encoder = get_encoder()
-else:
-    st.warning("⚠️ Failed to set up required models. The app may not function correctly.")
-    st.info("Try refreshing the page or check that all dependencies are installed.")
-    encoder = None
+# Load the encoder
+encoder = get_encoder()
 
 # Helper function to generate color gradient based on value
 def get_color(val, min_val, max_val):
