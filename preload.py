@@ -9,6 +9,7 @@ import os
 import sys
 import subprocess
 import time
+import traceback
 
 def main():
     print("Running preload script for Tree-LSTM Visualizer")
@@ -33,26 +34,72 @@ def main():
     except Exception as e:
         print(f"Error with spaCy model: {e}")
     
+    # Ensure NLTK is installed
+    print("Checking NLTK...")
+    try:
+        import nltk
+        print(f"NLTK version: {nltk.__version__}")
+        
+        # Create NLTK data directory if it doesn't exist
+        nltk_data_dir = os.path.expanduser('~/nltk_data')
+        os.makedirs(nltk_data_dir, exist_ok=True)
+        print(f"NLTK data directory: {nltk_data_dir}")
+        
+        # Set NLTK_DATA environment variable
+        os.environ['NLTK_DATA'] = nltk_data_dir
+        print(f"Set NLTK_DATA environment variable to: {nltk_data_dir}")
+    except Exception as e:
+        print(f"Error with NLTK: {e}")
+    
     # Ensure benepar model is downloaded
     print("Checking benepar model...")
     try:
         import benepar
-        import benepar.download as benepar_download
+        
+        # Try to get benepar version
+        try:
+            version = benepar.__version__
+            print(f"Benepar version: {version}")
+        except:
+            print("Benepar version not available")
         
         # Check if model exists
         model_exists = False
-        for path in benepar_download._get_download_dir():
-            if os.path.exists(os.path.join(path, "benepar_en3")):
-                model_exists = True
-                break
+        try:
+            import benepar.download as benepar_download
+            for path in benepar_download._get_download_dir():
+                model_path = os.path.join(path, "benepar_en3")
+                if os.path.exists(model_path):
+                    model_exists = True
+                    print(f"Found benepar_en3 model at: {model_path}")
+                    break
+        except Exception as e:
+            print(f"Error checking benepar model path: {e}")
         
         if not model_exists:
             print("Downloading benepar model...")
-            benepar.download('benepar_en3')
+            try:
+                benepar.download('benepar_en3')
+                print("Benepar model download completed")
+                
+                # Verify download
+                for path in benepar_download._get_download_dir():
+                    model_path = os.path.join(path, "benepar_en3")
+                    if os.path.exists(model_path):
+                        print(f"Verified benepar_en3 model at: {model_path}")
+                        model_exists = True
+                        break
+                
+                if not model_exists:
+                    print("WARNING: Benepar model download claimed success but model not found")
+            except Exception as e:
+                print(f"Error downloading benepar model: {e}")
+                print(traceback.format_exc())
         else:
             print("benepar model already downloaded")
     except Exception as e:
-        print(f"Error with benepar model: {e}")
+        print(f"Error with benepar: {e}")
+        print(traceback.format_exc())
     
     # Ensure transformers models are downloaded
     print("Checking BERT model...")

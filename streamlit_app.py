@@ -11,6 +11,11 @@ import time
 warnings.filterwarnings('ignore')
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
 
+# Set NLTK_DATA environment variable
+nltk_data_dir = os.path.expanduser('~/nltk_data')
+os.makedirs(nltk_data_dir, exist_ok=True)
+os.environ['NLTK_DATA'] = nltk_data_dir
+
 # Set page config first
 st.set_page_config(
     page_title="Tree-LSTM Visualizer",
@@ -88,6 +93,42 @@ src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
+# Try to download benepar model if needed
+try:
+    import nltk
+    import benepar
+    st.sidebar.success(f"NLTK version: {nltk.__version__}")
+    
+    # Try to get benepar version
+    try:
+        version = benepar.__version__
+        st.sidebar.success(f"Benepar version: {version}")
+    except:
+        st.sidebar.info("Benepar version not available")
+    
+    # Check if model exists and download if needed
+    model_exists = False
+    try:
+        import benepar.download as benepar_download
+        for path in benepar_download._get_download_dir():
+            model_path = os.path.join(path, "benepar_en3")
+            if os.path.exists(model_path):
+                model_exists = True
+                st.sidebar.success(f"Found benepar_en3 model at: {model_path}")
+                break
+    except Exception as e:
+        st.sidebar.warning(f"Error checking benepar model path: {str(e)}")
+    
+    if not model_exists:
+        st.sidebar.info("Downloading benepar model...")
+        try:
+            benepar.download('benepar_en3')
+            st.sidebar.success("Benepar model download completed")
+        except Exception as e:
+            st.sidebar.error(f"Error downloading benepar model: {str(e)}")
+except Exception as e:
+    st.sidebar.warning(f"Benepar not available: {str(e)}")
+
 # Simple function to ensure models are loaded
 @st.cache_resource
 def load_nlp_pipeline():
@@ -102,9 +143,19 @@ def load_nlp_pipeline():
             # Add benepar component if available
             try:
                 import benepar
-                st.sidebar.success(f"benepar version: {benepar.__version__}")
                 if "benepar" not in nlp.pipe_names:
-                    nlp.add_pipe("benepar", config={"model": "benepar_en3"})
+                    try:
+                        nlp.add_pipe("benepar", config={"model": "benepar_en3"})
+                        st.sidebar.success("Added benepar to spaCy pipeline")
+                    except Exception as e:
+                        st.warning(f"Could not add benepar to pipeline: {str(e)}")
+                        st.info("Trying to download benepar model...")
+                        try:
+                            benepar.download('benepar_en3')
+                            nlp.add_pipe("benepar", config={"model": "benepar_en3"})
+                            st.sidebar.success("Added benepar after download")
+                        except Exception as e2:
+                            st.warning(f"Failed to download and add benepar: {str(e2)}")
             except Exception as e:
                 st.warning(f"Berkeley Parser not available: {str(e)}. Tree visualization may be limited.")
             
@@ -130,7 +181,28 @@ def get_encoder():
             from src.tree_lstm_viz.model import TreeLSTMEncoder
             st.sidebar.success("Using standard TreeLSTMEncoder model")
             try:
+                # Try to handle the case where benepar is not available
+                try:
+                    # First check if benepar_en3 model is available
+                    import benepar
+                    import benepar.download as benepar_download
+                    model_exists = False
+                    for path in benepar_download._get_download_dir():
+                        model_path = os.path.join(path, "benepar_en3")
+                        if os.path.exists(model_path):
+                            model_exists = True
+                            st.sidebar.success(f"Found benepar_en3 model at: {model_path}")
+                            break
+                    
+                    if not model_exists:
+                        st.sidebar.warning("benepar_en3 model not found, downloading...")
+                        benepar.download('benepar_en3')
+                except Exception as e:
+                    st.sidebar.warning(f"Benepar check failed: {str(e)}")
+                
+                # Now try to initialize the encoder
                 encoder = TreeLSTMEncoder()
+                
                 # Test the encoder with a simple sentence to verify it works
                 test_result = encoder.encode("This is a test.")
                 if test_result:
@@ -139,7 +211,22 @@ def get_encoder():
             except Exception as e:
                 st.error(f"Error initializing TreeLSTMEncoder: {str(e)}")
                 st.info(f"Detailed error: {traceback.format_exc()}")
-                raise e
+                
+                # Try to download benepar model directly
+                try:
+                    st.info("Attempting to download benepar_en3 model directly...")
+                    import nltk
+                    nltk.download('benepar_en3')
+                    
+                    # Try again after download
+                    encoder = TreeLSTMEncoder()
+                    test_result = encoder.encode("This is a test.")
+                    if test_result:
+                        st.sidebar.success("TreeLSTMEncoder initialized successfully after download")
+                    return encoder
+                except Exception as e2:
+                    st.error(f"Failed to initialize after download attempt: {str(e2)}")
+                    raise e
         except ImportError as e:
             # Try alternative model
             try:
