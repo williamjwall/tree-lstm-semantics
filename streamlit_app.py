@@ -1,4 +1,3 @@
-import streamlit_patch  # Import our patch first
 import streamlit as st
 import json
 import graphviz
@@ -15,6 +14,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import traceback
 import time
 import warnings
+import pandas as pd
 
 # Silence all warnings including from transformers
 warnings.filterwarnings('ignore')
@@ -26,8 +26,6 @@ try:
     transformers.logging.set_verbosity_error()
 except ImportError:
     pass  # transformers not installed
-
-# Remove redundant patching code since it's now in streamlit_patch.py
 
 matplotlib.use('Agg')  # Use non-interactive backend
 
@@ -800,9 +798,6 @@ if sentence:
                     
                     # Create a formatted display table
                     st.markdown("### Hierarchical Tree Structure")
-                    
-                    # Import pandas for better dataframe display
-                    import pandas as pd
                     
                     # Function to get color from viridis-like palette
                     def get_color_hex(value):
