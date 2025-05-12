@@ -50,24 +50,6 @@ data/processed/
 # Streamlit
 .streamlit/
 
-# Distribution / packaging
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-
 # Unit test / coverage reports
 htmlcov/
 .tox/
@@ -84,5 +66,4 @@ logs/
 *.log
 
 # Local development settings
-.env
 .env.local 
