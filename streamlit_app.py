@@ -1,3 +1,4 @@
+import streamlit_patch  # Import our patch first
 import streamlit as st
 import json
 import graphviz
@@ -14,13 +15,21 @@ from sklearn.metrics.pairwise import cosine_similarity
 import traceback
 import time
 import warnings
+
+# Silence all warnings including from transformers
 warnings.filterwarnings('ignore')
+os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
+
+# Patch for transformers warnings - must be done before any transformers import
+try:
+    import transformers
+    transformers.logging.set_verbosity_error()
+except ImportError:
+    pass  # transformers not installed
+
+# Remove redundant patching code since it's now in streamlit_patch.py
 
 matplotlib.use('Agg')  # Use non-interactive backend
-
-# Ensure we're using CPU only
-os.environ['CUDA_VISIBLE_DEVICES'] = ''
-torch.cuda.is_available = lambda: False
 
 # Set page config
 st.set_page_config(
@@ -305,10 +314,11 @@ st.sidebar.info("Running on: CPU")
 example = "Julia kindly gave milk to a very friendly new neighbor after going to the river bank"
 st.markdown("<h3 style='font-weight: bold;'>Enter a sentence:</h3>", unsafe_allow_html=True)
 sentence = st.text_input(
-    "",
+    "Sentence",
     value=example,
     key="sentence_input",
-    help="The sentence will be parsed into a constituency tree"
+    help="The sentence will be parsed into a constituency tree",
+    label_visibility="collapsed"
 )
 
 # Check if sentence is too long
