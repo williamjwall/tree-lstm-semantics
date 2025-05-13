@@ -6,6 +6,7 @@ import os
 import sys
 import warnings
 import time
+import traceback
 
 # Silence all warnings including from transformers
 warnings.filterwarnings('ignore')
@@ -19,18 +20,44 @@ os.environ['NLTK_DATA'] = nltk_data_dir
 # Set page config first
 st.set_page_config(
     page_title="Tree-LSTM Visualizer",
-    page_icon="🌳",
+    page_icon="src/visualization/sakura.png",
     layout="wide"
 )
 
-# Check Python version
-st.sidebar.info(f"Python version: {sys.version}")
+# Title and description - moved to before loading container
+st.title("Tree-LSTM Semantic Visualizer")
 
-# Check for numpy compatibility
+# Create application initialization state
+init_complete = False
+
+# Show loading screen while initialization is in progress
+loading_container = st.container()
+with loading_container:
+    loading_col1, loading_col2, loading_col3 = st.columns([1, 2, 1])
+    with loading_col2:
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        status_text.text("Loading dependencies...")
+
+        # Function to update loading progress
+        def update_progress(progress_value, status):
+            progress_bar.progress(progress_value)
+            status_text.text(status)
+            
+        # Simulate loading stages (will be replaced by actual loading milestones)
+        import time
+        update_progress(0.1, "Loading Python dependencies...")
+        time.sleep(0.2)
+        update_progress(0.3, "Initializing NLP modules...")
+
+# Check Python version - keep this simple, remove NumPy path info
+st.sidebar.info(f"Python version: {sys.version.split()[0]}")
+
+# Check for numpy compatibility - simplified
 try:
     import numpy as np
-    st.sidebar.success(f"NumPy version: {np.__version__}")
-    st.sidebar.info(f"NumPy path: {np.__file__}")
+    # No need to show NumPy version in sidebar
+    update_progress(0.4, "NumPy loaded successfully...")
 except ImportError as e:
     st.error(f"Error importing NumPy: {str(e)}")
     st.stop()
@@ -41,34 +68,36 @@ except Exception as e:
         import subprocess
         subprocess.check_call([sys.executable, "-m", "pip", "install", "--force-reinstall", "numpy==1.26.3"])
         import numpy as np
-        st.sidebar.success(f"NumPy reinstalled: {np.__version__}")
+        update_progress(0.4, "NumPy fixed and loaded...")
     except Exception as e2:
         st.error(f"Failed to fix NumPy: {str(e2)}")
         st.stop()
 
-# Now import other dependencies that depend on numpy
+# Now import other dependencies that depend on numpy - simplified logging
 try:
+    update_progress(0.5, "Loading visualization libraries...")
     from matplotlib import pyplot as plt
     import matplotlib
-    st.sidebar.success(f"Matplotlib version: {matplotlib.__version__}")
+    # Remove matplotlib version display
     
     import plotly.graph_objects as go
     import plotly.express as px
     
     try:
         from sklearn import __version__ as sklearn_version
-        st.sidebar.success(f"Scikit-learn version: {sklearn_version}")
+        # Remove scikit-learn version display
         from sklearn.decomposition import PCA
         from sklearn.metrics.pairwise import cosine_similarity
+        update_progress(0.6, "ML libraries loaded...")
     except Exception as e:
         st.error(f"Error importing scikit-learn: {str(e)}")
         st.info("Trying to reinstall scikit-learn...")
         try:
             subprocess.check_call([sys.executable, "-m", "pip", "install", "--force-reinstall", "scikit-learn==1.3.2"])
             from sklearn import __version__ as sklearn_version
-            st.sidebar.success(f"Scikit-learn reinstalled: {sklearn_version}")
             from sklearn.decomposition import PCA
             from sklearn.metrics.pairwise import cosine_similarity
+            update_progress(0.6, "ML libraries fixed and loaded...")
         except Exception as e2:
             st.error(f"Failed to fix scikit-learn: {str(e2)}")
     
@@ -88,89 +117,112 @@ except ImportError:
 
 matplotlib.use('Agg')  # Use non-interactive backend
 
+# Simple function to ensure models are loaded with simplified logging
+@st.cache_resource
+def load_nlp_pipeline():
+    try:
+        import spacy
+        # Simplified version info - moved to a single line in sidebar later
+        
+        # Load spaCy model
+        try:
+            nlp = spacy.load("en_core_web_sm")
+            
+            # Add benepar component if available with less verbosity
+            try:
+                # First try to use our new BeneparHelper if available
+                if structured_logging:
+                    helper = BeneparHelper('benepar_en3')
+                    nlp = helper.setup_spacy_pipeline(nlp)
+                else:
+                    # Fall back to old implementation
+                    if "benepar" not in nlp.pipe_names:
+                        try:
+                            nlp.add_pipe("benepar", config={"model": "benepar_en3"})
+                        except Exception:
+                            # Reduced verbosity - silent error handling
+                            try:
+                                import benepar
+                                benepar.download('benepar_en3')
+                                nlp.add_pipe("benepar", config={"model": "benepar_en3"})
+                            except:
+                                pass
+            except:
+                # Reduced verbosity - silent handling
+                pass
+            
+            return nlp
+        except Exception:
+            st.error("Error loading spaCy model")
+            return None
+    except Exception:
+        st.error("Error setting up NLP pipeline")
+        return None
+
 # Add src directory to path if needed
 src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
-# Try to download benepar model if needed
+# Try to import our new logger and BeneparHelper
 try:
-    import nltk
-    import benepar
-    st.sidebar.success(f"NLTK version: {nltk.__version__}")
+    from src.tree_lstm_viz.logger import setup_logger, log_dependency_status, log_model_status
+    from src.tree_lstm_viz.benepar_utils import BeneparHelper
     
-    # Try to get benepar version
-    try:
-        version = benepar.__version__
-        st.sidebar.success(f"Benepar version: {version}")
-    except:
-        st.sidebar.info("Benepar version not available")
-    
-    # Check if model exists and download if needed
-    model_exists = False
-    try:
-        import benepar.download as benepar_download
-        for path in benepar_download._get_download_dir():
-            model_path = os.path.join(path, "benepar_en3")
-            if os.path.exists(model_path):
-                model_exists = True
-                st.sidebar.success(f"Found benepar_en3 model at: {model_path}")
-                break
-    except Exception as e:
-        st.sidebar.warning(f"Error checking benepar model path: {str(e)}")
-    
-    if not model_exists:
-        st.sidebar.info("Downloading benepar model...")
+    # Set up logger
+    logger = setup_logger('streamlit_app')
+    structured_logging = True
+    logger.info("Starting Tree-LSTM Visualizer")
+except ImportError:
+    structured_logging = False
+
+# Try to download benepar model if needed - simplified logging
+try:
+    # First try to use our new BeneparHelper
+    if structured_logging:
+        logger.info("Setting up Benepar using BeneparHelper")
+        helper = BeneparHelper('benepar_en3')
+        benepar_installed = helper.ensure_benepar_installed()
+        
+        # Check if model is downloaded
+        model_downloaded, model_path = helper.is_model_downloaded()
+        if not model_downloaded:
+            st.sidebar.info("Downloading benepar model...")
+            helper.download_model()
+    else:
+        # Fall back to old implementation
+        import nltk
+        import benepar
+        
+        # Check if model exists and download if needed
+        model_exists = False
         try:
-            benepar.download('benepar_en3')
-            st.sidebar.success("Benepar model download completed")
+            import benepar.download as benepar_download
+            for path in benepar_download._get_download_dir():
+                model_path = os.path.join(path, "benepar_en3")
+                if os.path.exists(model_path):
+                    model_exists = True
+                    break
         except Exception as e:
-            st.sidebar.error(f"Error downloading benepar model: {str(e)}")
+            pass
+        
+        if not model_exists:
+            st.sidebar.info("Downloading benepar model...")
+            try:
+                benepar.download('benepar_en3')
+            except Exception as e:
+                st.sidebar.error(f"Error downloading benepar model: {str(e)}")
 except Exception as e:
     st.sidebar.warning(f"Benepar not available: {str(e)}")
 
-# Simple function to ensure models are loaded
-@st.cache_resource
-def load_nlp_pipeline():
-    try:
-        import spacy
-        st.sidebar.success(f"spaCy version: {spacy.__version__}")
-        
-        # Load spaCy model (should be installed via requirements.txt)
-        try:
-            nlp = spacy.load("en_core_web_sm")
-            
-            # Add benepar component if available
-            try:
-                import benepar
-                if "benepar" not in nlp.pipe_names:
-                    try:
-                        nlp.add_pipe("benepar", config={"model": "benepar_en3"})
-                        st.sidebar.success("Added benepar to spaCy pipeline")
-                    except Exception as e:
-                        st.warning(f"Could not add benepar to pipeline: {str(e)}")
-                        st.info("Trying to download benepar model...")
-                        try:
-                            benepar.download('benepar_en3')
-                            nlp.add_pipe("benepar", config={"model": "benepar_en3"})
-                            st.sidebar.success("Added benepar after download")
-                        except Exception as e2:
-                            st.warning(f"Failed to download and add benepar: {str(e2)}")
-            except Exception as e:
-                st.warning(f"Berkeley Parser not available: {str(e)}. Tree visualization may be limited.")
-            
-            return nlp
-        except Exception as e:
-            st.error(f"Error loading spaCy model: {str(e)}")
-            return None
-    except Exception as e:
-        st.error(f"Error setting up NLP pipeline: {str(e)}")
-        st.info(f"Detailed error: {traceback.format_exc()}")
-        return None
+# Update progress
+update_progress(0.7, "Initializing NLP pipeline...")
 
-# Initialize NLP pipeline
+# Initialize NLP pipeline with simplified log output
 with st.spinner("Setting up NLP models..."):
     nlp = load_nlp_pipeline()
+    if not nlp:
+        st.sidebar.error("NLP pipeline initialization failed")
 
 # Initialize encoder
 @st.cache_resource
@@ -179,96 +231,76 @@ def get_encoder():
         # First try standard model
         try:
             from src.tree_lstm_viz.model import TreeLSTMEncoder
-            st.sidebar.success("Using standard TreeLSTMEncoder model")
-            try:
-                # Try to handle the case where benepar is not available
-                try:
-                    # First check if benepar_en3 model is available
-                    import benepar
-                    import benepar.download as benepar_download
-                    model_exists = False
-                    for path in benepar_download._get_download_dir():
-                        model_path = os.path.join(path, "benepar_en3")
-                        if os.path.exists(model_path):
-                            model_exists = True
-                            st.sidebar.success(f"Found benepar_en3 model at: {model_path}")
-                            break
-                    
-                    if not model_exists:
-                        st.sidebar.warning("benepar_en3 model not found, downloading...")
-                        benepar.download('benepar_en3')
-                except Exception as e:
-                    st.sidebar.warning(f"Benepar check failed: {str(e)}")
-                
-                # Now try to initialize the encoder
-                encoder = TreeLSTMEncoder()
-                
-                # Test the encoder with a simple sentence to verify it works
-                test_result = encoder.encode("This is a test.")
-                if test_result:
-                    st.sidebar.success("TreeLSTMEncoder initialized successfully")
-                return encoder
-            except Exception as e:
-                st.error(f"Error initializing TreeLSTMEncoder: {str(e)}")
-                st.info(f"Detailed error: {traceback.format_exc()}")
-                
-                # Try to download benepar model directly
-                try:
-                    st.info("Attempting to download benepar_en3 model directly...")
-                    import nltk
-                    nltk.download('benepar_en3')
-                    
-                    # Try again after download
-                    encoder = TreeLSTMEncoder()
-                    test_result = encoder.encode("This is a test.")
-                    if test_result:
-                        st.sidebar.success("TreeLSTMEncoder initialized successfully after download")
-                    return encoder
-                except Exception as e2:
-                    st.error(f"Failed to initialize after download attempt: {str(e2)}")
-                    raise e
+            # No need to log this to sidebar
+            
+            # Now try to initialize the encoder (which will handle Benepar setup internally)
+            encoder = TreeLSTMEncoder()
+            
+            # Test the encoder with a simple sentence to verify it works
+            test_result = encoder.encode("This is a test.")
+            if test_result:
+                # No need for success message
+                pass
+            return encoder
         except ImportError as e:
             # Try alternative model
             try:
                 from src.tree_lstm_viz.model_alt import TreeLSTMEncoder
-                st.sidebar.info("Using alternative TreeLSTMEncoder implementation")
                 try:
                     encoder = TreeLSTMEncoder()
                     # Test the encoder with a simple sentence
                     test_result = encoder.encode("This is a test.")
-                    if test_result:
-                        st.sidebar.success("Alternative TreeLSTMEncoder initialized successfully")
                     return encoder
                 except Exception as e:
                     st.error(f"Error initializing alternative TreeLSTMEncoder: {str(e)}")
-                    st.info(f"Detailed error: {traceback.format_exc()}")
                     return None
-            except ImportError as e:
-                st.error(f"Could not import TreeLSTMEncoder: {str(e)}")
-                st.info(f"Detailed error: {traceback.format_exc()}")
+            except ImportError:
+                st.error("Could not import TreeLSTMEncoder")
                 return None
+        except Exception as e:
+            st.error(f"Error initializing TreeLSTMEncoder: {str(e)}")
+            return None
     except Exception as e:
-        st.error(f"Failed to initialize TreeLSTMEncoder: {str(e)}")
+        st.error(f"Unexpected error in get_encoder: {str(e)}")
         st.info(f"Detailed error: {traceback.format_exc()}")
-        st.info("This may be due to binary compatibility issues. Try reloading the page.")
         return None
 
-# Load the encoder
-with st.spinner("Initializing Tree-LSTM model..."):
-    encoder = get_encoder()
+# Update progress
+update_progress(0.85, "Loading Tree-LSTM encoder...")
 
-# Check if encoder loaded successfully
+# Initialize encoder with simplified log output
+with st.spinner("Loading Tree-LSTM encoder..."):
+    encoder = get_encoder()
+    if encoder:
+        st.sidebar.success("Tree-LSTM encoder ready")
+        update_progress(0.95, "Finalizing application...")
+    else:
+        st.sidebar.error("Tree-LSTM encoder initialization failed")
+        update_progress(0.95, "Application initialization incomplete...")
+    
+# Simplified hardware info display - extremely concise
+if encoder:
+    import torch
+    device = "GPU" if torch.cuda.is_available() else "CPU"
+    st.sidebar.info(f"Running on: {device}")
+
+# Check if encoder loaded successfully - simplify error message
 if encoder is None:
-    st.error("Failed to initialize the Tree-LSTM model. The app may not work correctly.")
-    st.info("You can try refreshing the page or contact support.")
-    st.warning("If you're seeing binary compatibility errors, please try the following steps:")
-    st.code("""
-    # In your terminal:
-    pip uninstall -y numpy scikit-learn spacy
-    pip install numpy==1.26.3
-    pip install scikit-learn==1.3.2
-    pip install -r requirements.txt
-    """)
+    st.error("Failed to initialize the Tree-LSTM model. Try refreshing the page.")
+
+# Mark initialization as complete
+init_complete = True
+update_progress(1.0, "Application ready!")
+time.sleep(0.5)
+
+# Hide the loading screen once initialization is complete
+if init_complete:
+    loading_container.empty()
+    
+    # Show welcome message after initialization
+    welcome_msg = st.success("Welcome to the Tree-LSTM Semantic Visualizer. Enter a sentence below to begin.")
+    time.sleep(3)  # Reduced time for better UX
+    welcome_msg.empty()
 
 # Helper function to generate color gradient based on value
 def get_color(val, min_val, max_val):
@@ -288,216 +320,221 @@ def get_color(val, min_val, max_val):
 MAX_SENTENCE_LENGTH = 60
 MAX_VECTOR_DISPLAY = 20
 
-# Title and description
-st.title("Tree-LSTM Semantic Visualizer")
+# Main application content (Introduction text)
+if init_complete:  # Only show content when initialization is complete
+
+    with st.expander("Understanding The Visualization", expanded=True):
+        st.markdown("""
+        ## Key Concepts in Tree-LSTM Visualization
+
+        ### Semantic Representation
+        Every node in the tree contains a **hidden state vector** (a multi-dimensional representation of meaning) produced by the Tree-LSTM network. 
+        These vectors encode semantic properties that capture various aspects of meaning - from simple features like tense or number to complex 
+        semantic relationships.
+
+        ### Visual Elements and Their Meaning
+        
+        | Element | What It Represents |
+        |---------|-------------------|
+        | **Node Position** | In 3D space, positions reflect semantic dimensions - similar meanings appear closer together |
+        | **Node Color** | Based on the 3rd dimension of the hidden state (h[2]) - a key semantic feature |
+        | **Node Size** | Reflects the "semantic weight" or importance of each phrase |
+        | **Tree Connections** | Show the compositional structure - how meanings combine hierarchically |
+        | **Span Attribute** | Indicates which tokens (by index) each node covers in the original sentence |
+        
+        ### Color Spectrum Interpretation
+        
+        - **Purple/Blue** nodes have lower values in the displayed semantic dimension
+        - **Green/Yellow** nodes have higher values
+        - This dimension may represent features like entity vs. action, concreteness vs. abstractness, or other semantic properties
+        
+        ### Reading the Visualizations
+        
+        1. **Compositional Meaning**
+           - Watch how the Tree-LSTM combines smaller meaning units into larger ones
+           - Parent nodes integrate and abstract over their children
+           - The root node represents the entire sentence meaning
+           
+        2. **Semantic Relationships**
+           - Nodes that appear close together in the semantic space have similar meanings
+           - Distance represents semantic difference or dissimilarity
+           - Hovering over nodes reveals the numerical values behind each representation
+           
+        3. **Comparing View Types**
+           - Different visualization modes highlight different aspects of meaning
+           - The tree view emphasizes grammatical structure
+           - The semantic space view reveals meaning relationships that may cross grammatical boundaries
+        """)
+
+    with st.expander("Tree Structure + Semantic Dimensions (Visualization Guide)", expanded=False):
+        st.markdown("""
+        ## Tree Structure + Semantic Dimensions
+        
+        **What you're seeing:**
+        This visualization shows how meaning is structured within the grammar of a sentence. 
+        
+        **How it works:**
+        - The **X and Y positions** come directly from the first two dimensions of each node's semantic meaning
+        - The **Z position** (vertical) shows the grammatical depth in the tree
+        - **Bigger nodes** have more "semantic weight" or importance
+        - **Node colors** represent another aspect of meaning (the third semantic dimension)
+        
+        **Why it's useful:**
+        This approach lets you see how meaning is built up through the grammatical structure. Words and phrases 
+        that have similar meanings will appear closer together on the X-Y plane, while their grammatical 
+        relationship is preserved vertically.
+        
+        **What to look for:**
+        - Similar words/phrases clustered together horizontally
+        - How meaning flows and transforms as you move up the tree
+        - Parent nodes that combine and abstract the meaning of their children
+        """)
+
+    with st.expander("Pure Semantic Space (PCA) (Visualization Guide)", expanded=False):
+        st.markdown("""
+        ## Pure Semantic Space
+
+        **What you're seeing:**
+        This visualization shows the pure meaning relationships between words and phrases, freed from grammatical constraints.
+        
+        **How it works:**
+        - All dimensions (X, Y, and Z) represent semantic meaning rather than grammar
+        - Similar meanings cluster together in 3D space
+        - Tree connections are preserved but don't constrain where nodes appear
+        - PCA (Principal Component Analysis) finds the most important patterns in the meaning vectors
+        
+        **Why it's useful:**
+        This approach reveals semantic relationships that might be hidden by the tree structure. It's like seeing the 
+        "meaning landscape" of the sentence, where similar concepts naturally group together.
+        
+        **What to look for:**
+        - Clusters of semantically related words and phrases
+        - The root node's position relative to its parts
+        - How different types of phrases (noun phrases, verb phrases) form distinct regions
+        - Outliers that carry unique meaning in the sentence
+        """)
+
+    with st.expander("Hybrid View (Visualization Guide)", expanded=False):
+        st.markdown("""
+        ## Hybrid View
+        
+        **What you're seeing:**
+        This visualization balances both grammar and meaning in one view.
+        
+        **How it works:**
+        - The **X and Y positions** show semantic similarity between words/phrases
+        - The **Z position** (vertical) preserves the grammatical tree structure
+        - Nodes at the same height belong to the same grammatical level
+        - Similar meanings cluster together horizontally at each level
+        
+        **Why it's useful:**
+        This approach gives you the best of both worlds - you can see how meaning relates to structure.
+        It shows which parts of speech have similar meanings while maintaining the grammatical hierarchy.
+        
+        **What to look for:**
+        - How meaning clusters horizontally at each grammatical level
+        - The progression of meaning as you move up the tree
+        - Comparisons between phrases at the same grammatical depth
+        - The relationship between a parent's meaning and its children's meanings
+        """)
+
+    with st.expander("Semantic Similarity Heatmap (Visualization Guide)", expanded=False):
+        st.markdown("""
+        ## Semantic Similarity Heatmap
+        
+        **What you're seeing:**
+        This visualization shows how similar or different the meanings of various sentence constituents are to each other.
+        
+        **How it works:**
+        - Each cell shows the semantic similarity between two constituents
+        - Brighter/warmer colors indicate higher similarity
+        - The diagonal is always brightest (self-similarity = 1.0)
+        - The root node is included for comparison with all other constituents
+        
+        **Why it's useful:**
+        This approach reveals which parts of the sentence are semantically related, even if they're 
+        not close in the tree structure. It helps you identify which phrases contribute most to the 
+        overall sentence meaning.
+        
+        **What to look for:**
+        - Which phrases are most similar to the root (overall meaning)
+        - Clusters of mutually similar constituents
+        - Phrases that have little similarity with others (semantic outliers)
+        - How similarity patterns relate to grammatical roles
+        """)
+        
+    with st.expander("Phrasal Structure Diagram (Visualization Guide)", expanded=False):
+        st.markdown("""
+        ## Phrasal Structure Diagram
+        
+        **What you're seeing:**
+        This visualization shows the hierarchical structure of phrases with semantic information encoded in color.
+        
+        **How it works:**
+        - Concentric rings represent tree depth levels
+        - Each segment represents a constituent/phrase
+        - Size reflects the phrase's structural importance
+        - Color shows semantic value (using the same dimension as the 3D view)
+        
+        **Why it's useful:**
+        This visualization makes it easy to see how phrases nest within each other and how 
+        semantic properties propagate up through the structure. It provides a compact overview 
+        of the entire sentence structure.
+        
+        **What to look for:**
+        - How colors (semantic values) change as you move from inner to outer rings
+        - The distribution of semantic values across different phrase types
+        - How the root's semantic value relates to its constituent parts
+        - Patterns in how meaning is composed hierarchically
+        
+        **Note on colors:**
+        - Yellow/green shades indicate higher values in semantic dimension 3
+        - Purple/blue shades indicate lower values
+        - This allows you to track one aspect of meaning throughout the tree structure
+        """)
+
+# Input with example and better styling
 st.markdown("""
-This application visualizes constituency parse trees of sentences using:
-1. A 3D interactive visualization where node positions reflect semantic representations
-2. A traditional top-down 2D tree diagram
-3. Additional semantic relationship visualizations
+<style>
+    .sentence-input {
+        border-radius: 10px;
+        border: 1px solid #ddd;
+        padding: 15px;
+        background-color: #f9f9f9;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+</style>
+""", unsafe_allow_html=True)
 
-Below are the conceptual explanations for each visualization:
-
-**Note:** Each node includes a 'span' attribute that indicates the range of token indices in the sentence. The semantic values used for coloring (from the third dimension, h[2]) capture key semantic features learned by the model.
-""")
-
-with st.expander("Understanding The Visualization", expanded=True):
-    st.markdown("""
-    ## Key Concepts in Tree-LSTM Visualization
-
-    **Understanding Node Colors and Semantic Values:**
-    - **What are the semantic values?**
-      - Each node has a hidden state vector (128 dimensions) produced by the Tree-LSTM network
-      - These values represent learned semantic features that capture meaning
-      - The semantic values used for coloring are taken from the 3rd dimension (h[2]) of the hidden state
-      - The first dimensions often encode higher-level semantic properties
-
-    - **Significance of Semantic Dimension 3:**
-      - The color of each node is based on the 3rd dimension of its hidden state (h[2])
-      - This dimension was selected because it often captures interesting semantic distinctions
-      - **Purple/Blue** nodes have lower values in this dimension
-      - **Yellow/Green** nodes have higher values
-
-    - **Interpreting these values:**
-      - Similar colors indicate nodes with similar semantic properties
-      - Color patterns reveal how meaning is composed through the tree
-      - When comparing parent nodes to children, color shifts indicate how meaning transforms
-      - This dimension may capture features like: concreteness vs. abstractness, entity vs. action, sentiment, or tense information
+input_container = st.container()
+with input_container:
+    st.markdown('<div class="sentence-input">', unsafe_allow_html=True)
+    st.markdown("<h3 style='font-weight: bold;'>Enter a sentence:</h3>", unsafe_allow_html=True)
     
-    1. **Node Meaning:**
-       - Each node represents a word or phrase from the sentence
-       - Leaf nodes are individual words
-       - Internal nodes are phrases that combine their children
-       - The root node represents the entire sentence
-       
-    2. **Semantic Relationships:**
-       - Nodes that appear close together have similar meanings
-       - Distance between nodes represents meaning differences
-       - Hovering shows the actual values that make up each node's meaning
-       
-    3. **Understanding Composition:**
-       - Watch how the Tree-LSTM combines smaller meanings into larger ones
-       - Parent nodes represent abstractions of their children
-       - The size of nodes shows their "semantic richness"
-       
-    4. **Compare Different Views:**
-       - Try all three visualization modes with the same sentence
-       - Notice how different aspects of meaning become visible in each mode
-       - Use the tree view to understand structure, and 3D view to see meaning
-       
-    5. **Understanding Colors:**
-       - The consistent color scheme shows semantic dimension 3
-       - The same color in different visualizations represents the same semantic value
-       - Track how this semantic aspect flows from lower to higher levels in the tree
-    6. **Understanding the 'span' Attribute:**
-       - The 'span' attribute defines the start and end token indices of the original sentence that form the node. This helps correlate each node with its position in the sentence.
+    example = "Julia kindly gave milk to a very friendly new neighbor after going to the river bank"
+    sentence = st.text_input(
+        "Sentence",
+        value=example,
+        key="sentence_input",
+        help="The sentence will be parsed into a constituency tree",
+        label_visibility="collapsed"
+    )
+    
+    # Add examples as bullet points instead of buttons
+    st.markdown("**Examples:**")
+    st.markdown("""
+    * Colorless green ideas sleep furiously.
+    * The man who hunts ducks out on weekends.
+    * Who did you say that Mary claimed that John believed that Peter saw?
     """)
 
-# Conceptual explanations in header with collapsible sections
-with st.expander("Tree Structure + Semantic Dimensions (Visualization Guide)", expanded=False):
-    st.markdown("""
-    ## Tree Structure + Semantic Dimensions
     
-    **What you're seeing:**
-    This visualization shows how meaning is structured within the grammar of a sentence. 
-    
-    **How it works:**
-    - The **X and Y positions** come directly from the first two dimensions of each node's semantic meaning
-    - The **Z position** (vertical) shows the grammatical depth in the tree
-    - **Bigger nodes** have more "semantic weight" or importance
-    - **Node colors** represent another aspect of meaning (the third semantic dimension)
-    
-    **Why it's useful:**
-    This approach lets you see how meaning is built up through the grammatical structure. Words and phrases 
-    that have similar meanings will appear closer together on the X-Y plane, while their grammatical 
-    relationship is preserved vertically.
-    
-    **What to look for:**
-    - Similar words/phrases clustered together horizontally
-    - How meaning flows and transforms as you move up the tree
-    - Parent nodes that combine and abstract the meaning of their children
-    """)
-
-with st.expander("Pure Semantic Space (PCA) (Visualization Guide)", expanded=False):
-    st.markdown("""
-    ## Pure Semantic Space
-
-    **What you're seeing:**
-    This visualization shows the pure meaning relationships between words and phrases, freed from grammatical constraints.
-    
-    **How it works:**
-    - All dimensions (X, Y, and Z) represent semantic meaning rather than grammar
-    - Similar meanings cluster together in 3D space
-    - Tree connections are preserved but don't constrain where nodes appear
-    - PCA (Principal Component Analysis) finds the most important patterns in the meaning vectors
-    
-    **Why it's useful:**
-    This approach reveals semantic relationships that might be hidden by the tree structure. It's like seeing the 
-    "meaning landscape" of the sentence, where similar concepts naturally group together.
-    
-    **What to look for:**
-    - Clusters of semantically related words and phrases
-    - The root node's position relative to its parts
-    - How different types of phrases (noun phrases, verb phrases) form distinct regions
-    - Outliers that carry unique meaning in the sentence
-    """)
-
-with st.expander("Hybrid View (Visualization Guide)", expanded=False):
-    st.markdown("""
-    ## Hybrid View
-    
-    **What you're seeing:**
-    This visualization balances both grammar and meaning in one view.
-    
-    **How it works:**
-    - The **X and Y positions** show semantic similarity between words/phrases
-    - The **Z position** (vertical) preserves the grammatical tree structure
-    - Nodes at the same height belong to the same grammatical level
-    - Similar meanings cluster together horizontally at each level
-    
-    **Why it's useful:**
-    This approach gives you the best of both worlds - you can see how meaning relates to structure.
-    It shows which parts of speech have similar meanings while maintaining the grammatical hierarchy.
-    
-    **What to look for:**
-    - How meaning clusters horizontally at each grammatical level
-    - The progression of meaning as you move up the tree
-    - Comparisons between phrases at the same grammatical depth
-    - The relationship between a parent's meaning and its children's meanings
-    """)
-
-with st.expander("Semantic Similarity Heatmap (Visualization Guide)", expanded=False):
-    st.markdown("""
-    ## Semantic Similarity Heatmap
-    
-    **What you're seeing:**
-    This visualization shows how similar or different the meanings of various sentence constituents are to each other.
-    
-    **How it works:**
-    - Each cell shows the semantic similarity between two constituents
-    - Brighter/warmer colors indicate higher similarity
-    - The diagonal is always brightest (self-similarity = 1.0)
-    - The root node is included for comparison with all other constituents
-    
-    **Why it's useful:**
-    This approach reveals which parts of the sentence are semantically related, even if they're 
-    not close in the tree structure. It helps you identify which phrases contribute most to the 
-    overall sentence meaning.
-    
-    **What to look for:**
-    - Which phrases are most similar to the root (overall meaning)
-    - Clusters of mutually similar constituents
-    - Phrases that have little similarity with others (semantic outliers)
-    - How similarity patterns relate to grammatical roles
-    """)
-    
-with st.expander("Phrasal Structure Diagram (Visualization Guide)", expanded=False):
-    st.markdown("""
-    ## Phrasal Structure Diagram
-    
-    **What you're seeing:**
-    This visualization shows the hierarchical structure of phrases with semantic information encoded in color.
-    
-    **How it works:**
-    - Concentric rings represent tree depth levels
-    - Each segment represents a constituent/phrase
-    - Size reflects the phrase's structural importance
-    - Color shows semantic value (using the same dimension as the 3D view)
-    
-    **Why it's useful:**
-    This visualization makes it easy to see how phrases nest within each other and how 
-    semantic properties propagate up through the structure. It provides a compact overview 
-    of the entire sentence structure.
-    
-    **What to look for:**
-    - How colors (semantic values) change as you move from inner to outer rings
-    - The distribution of semantic values across different phrase types
-    - How the root's semantic value relates to its constituent parts
-    - Patterns in how meaning is composed hierarchically
-    
-    **Note on colors:**
-    - Yellow/green shades indicate higher values in semantic dimension 3
-    - Purple/blue shades indicate lower values
-    - This allows you to track one aspect of meaning throughout the tree structure
-    """)
-
-# Device info
-st.sidebar.info("Running on: CPU")
-
-# Input with example
-example = "Julia kindly gave milk to a very friendly new neighbor after going to the river bank"
-st.markdown("<h3 style='font-weight: bold;'>Enter a sentence:</h3>", unsafe_allow_html=True)
-sentence = st.text_input(
-    "Sentence",
-    value=example,
-    key="sentence_input",
-    help="The sentence will be parsed into a constituency tree",
-    label_visibility="collapsed"
-)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # Check if sentence is too long
 if sentence and len(sentence.split()) > MAX_SENTENCE_LENGTH:
-    st.warning(f"⚠️ Sentence is too long ({len(sentence.split())} words). Please use {MAX_SENTENCE_LENGTH} words or fewer to avoid memory issues.")
+    st.warning(f"Sentence is too long ({len(sentence.split())} words). Please use {MAX_SENTENCE_LENGTH} words or fewer to avoid memory issues.")
     sentence = " ".join(sentence.split()[:MAX_SENTENCE_LENGTH])
     st.info(f"Truncated to: '{sentence}...'")
 
@@ -509,10 +546,10 @@ if sentence:
         
         # Create tabs for different visualizations - REORDERED to put 3D first
         tab1, tab2, tab3, tab4 = st.tabs([
-            "3D Tree Visualization",
-            "2D Tree Visualization", 
-            "Semantic Similarity Heatmap",
-            "Phrasal Structure Diagram"
+            "3D Semantic View",
+            "Tree Structure", 
+            "Similarity Heatmap",
+            "Structural Analysis"
         ])
         
         # Extract all hidden states from the tree for use in all visualizations
@@ -736,7 +773,9 @@ if sentence:
                         y=0.99,
                         xanchor="left",
                         x=0.01
-                    )
+                    ),
+                    height=650,  # Add fixed height to ensure proper spacing
+                    autosize=True
                 )
                 
                 # Add Plotly config to fix web worker issues
@@ -1139,3 +1178,16 @@ if sentence:
     except Exception as e:
         st.error(f"Error: {str(e)}")
         st.info("Try a different sentence or check the console for details.") 
+
+# Add vertical space before footer to prevent overlap
+st.markdown("<div style='margin-top: 50px;'></div>", unsafe_allow_html=True)
+
+# Add footer with attribution
+st.markdown("""---""")
+st.markdown("""
+<div style="text-align: center; padding: 10px; margin-top: 30px; color: #888;">
+    <p>Tree-LSTM Semantic Visualizer | Developed by William Wall</p>
+    <p style="font-size: 0.8em;">Built with Streamlit, spaCy, PyTorch, and the Berkeley Neural Parser</p>
+    <p style="font-size: 0.8em;">© 2025 | <a href="https://github.com/williamjwall/tree-lstm-generator">GitHub Repository</a></p>
+</div>
+""", unsafe_allow_html=True) 

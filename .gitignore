@@ -14,6 +14,8 @@ venv/
 env/
 ENV/
 .env
+.venv/
+.python-version
 
 # IDE
 .idea/
@@ -34,9 +36,17 @@ ENV/
 *.bin
 data/raw/
 data/processed/
+*.pickle
+*.pkl
+*.joblib
+*.onnx
+*.tflite
+model_checkpoints/
+saved_models/
 
 # Streamlit
 .streamlit/
+.streamlit/secrets.toml
 
 # Unit test / coverage reports
 htmlcov/
@@ -48,10 +58,33 @@ nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
+.pytest_cache/
 
 # Logs
 logs/
 *.log
 
 # Local development settings
-.env.local 
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Large files and directories
+*.csv
+*.tsv
+*.parquet
+*.zip
+*.tar.gz
+*.gz
+*.rar
+nltk_data/
+spacy_models/
+benepar_models/
+downloads/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.temp/ 

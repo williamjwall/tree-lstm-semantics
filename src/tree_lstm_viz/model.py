@@ -3,6 +3,10 @@ import torch.nn as nn
 import spacy
 from typing import List, Dict, Any, Optional, Tuple
 
+# Import our utilities
+from src.tree_lstm_viz.logger import app_logger
+from src.tree_lstm_viz.benepar_utils import BeneparHelper
+
 # Force CPU mode to avoid CUDA compatibility issues
 torch.cuda.is_available = lambda: False
 
@@ -134,30 +138,48 @@ class TreeLSTMEncoder:
     """Encode sentences using Tree-LSTM over constituency parse trees."""
     
     def __init__(self, model_name: str = 'bert-base-uncased'):
-        import benepar
-        from transformers import BertModel, BertTokenizer, BertTokenizerFast
+        from transformers import BertModel, BertTokenizerFast
         
         # Set device (CPU only for compatibility)
         self.device = torch.device('cpu')
+        app_logger.info(f"Running on: {self.device}")
+        
+        # Initialize Benepar helper 
+        self.benepar_helper = BeneparHelper('benepar_en3')
+        
+        # Ensure Benepar is installed
+        self.benepar_helper.ensure_benepar_installed()
         
         # Load models
         try:
+            # Load spaCy model
             self.nlp = spacy.load('en_core_web_sm')
-            # Add Benepar component for constituency parsing
-            self.nlp.add_pipe('benepar', config={'model': 'benepar_en3'})
+            
+            # Setup Benepar in the spaCy pipeline with robust error handling
+            self.nlp = self.benepar_helper.setup_spacy_pipeline(self.nlp)
+            
+            # Download the Benepar model if needed
+            self.benepar_helper.download_model()
             
             # Load BERT for token embeddings
+            app_logger.info("Loading BERT model and tokenizer...")
             self.bert = BertModel.from_pretrained(model_name).to(self.device)
             # Explicitly use fast tokenizer
             self.tokenizer = BertTokenizerFast.from_pretrained(model_name)
+            app_logger.info("BERT model and tokenizer loaded successfully")
             
             # Initialize Tree-LSTM
+            app_logger.info("Initializing Tree-LSTM model...")
             self.tree_lstm = ChildSumTreeLSTM(
                 d_in=768,   # BERT hidden size
                 d_hidden=768
             ).to(self.device)
+            app_logger.info("Tree-LSTM initialized successfully")
             
         except Exception as e:
+            app_logger.error(f"Failed to load models: {str(e)}")
+            import traceback
+            app_logger.debug(traceback.format_exc())
             raise RuntimeError(f"Failed to load models: {str(e)}")
     
     def encode(self, sentence: str) -> Dict[str, Any]:
@@ -211,6 +233,9 @@ class TreeLSTMEncoder:
                 root_embedding, _ = self.tree_lstm(root, vec_lookup)
         
         except Exception as e:
+            app_logger.error(f"Error processing tree: {str(e)}")
+            import traceback
+            app_logger.debug(traceback.format_exc())
             raise RuntimeError(f"Error processing tree: {str(e)}")
         
         return {
