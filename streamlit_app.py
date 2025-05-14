@@ -375,33 +375,6 @@ MAX_VECTOR_DISPLAY = 20
 
 # Main application content
 if init_complete:  # Only show content when initialization is complete
-    
-    # Input with example and better styling - MOVED TO TOP
-    st.markdown("""
-    <style>
-        .sentence-input {
-            border-radius: 10px;
-            border: 1px solid #ddd;
-            padding: 15px;
-            background-color: #574f4f;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .stButton button {
-            background-color: #4a86e8;
-            color: white;
-            font-weight: bold;
-            border-radius: 8px;
-            border: none;
-            padding: 10px 20px;
-            margin-top: 10px;
-        }
-        .stButton button:hover {
-            background-color: #3a76d8;
-            border: none;
-        }
-    </style>
-    """, unsafe_allow_html=True)
 
     input_container = st.container()
     with input_container:
