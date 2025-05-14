@@ -30,25 +30,70 @@ st.title("Tree-LSTM Semantic Visualizer")
 # Create application initialization state
 init_complete = False
 
+# Define initialization steps for accurate progress tracking
+init_steps = {
+    "dependencies": {"weight": 0.2, "completed": False, "message": "Loading dependencies..."},
+    "numpy": {"weight": 0.1, "completed": False, "message": "Loading numerical libraries..."},
+    "visualization": {"weight": 0.1, "completed": False, "message": "Initializing visualization components..."},
+    "ml_libs": {"weight": 0.1, "completed": False, "message": "Loading machine learning libraries..."},
+    "nlp_pipeline": {"weight": 0.2, "completed": False, "message": "Configuring NLP pipeline..."},
+    "benepar": {"weight": 0.1, "completed": False, "message": "Setting up parsing components..."},
+    "encoder": {"weight": 0.2, "completed": False, "message": "Loading semantic encoder..."}
+}
+
+# Function to calculate current progress based on completed steps
+def calculate_progress():
+    completed_weight = sum(step["weight"] for step in init_steps.values() if step["completed"])
+    return completed_weight
+
 # Show loading screen while initialization is in progress
 loading_container = st.container()
 with loading_container:
-    loading_col1, loading_col2, loading_col3 = st.columns([1, 2, 1])
+    # Custom CSS for a more professional, thicker loading bar
+    st.markdown("""
+    <style>
+    .stProgress {
+        margin-top: 20px;
+        margin-bottom: 30px;
+    }
+    .stProgress > div > div > div > div {
+        background-color: #4a86e8;
+        height: 12px;
+        border-radius: 4px;
+    }
+    .stProgress > div > div > div {
+        background-color: rgba(74, 134, 232, 0.15);
+        height: 12px;
+        border-radius: 4px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Better layout with more space for the loading bar
+    st.markdown("<div style='height: 50px;'></div>", unsafe_allow_html=True)
+    loading_col1, loading_col2, loading_col3 = st.columns([1, 3, 1])
     with loading_col2:
+        # Center the image with CSS
         progress_bar = st.progress(0)
         status_text = st.empty()
-        status_text.text("Loading dependencies...")
+        status_text.markdown("<div style='text-align: center; color: #4a86e8; font-size: 16px; margin-top: 10px; font-weight: 500;'>Loading dependencies...</div>", unsafe_allow_html=True)
 
         # Function to update loading progress
-        def update_progress(progress_value, status):
-            progress_bar.progress(progress_value)
-            status_text.text(status)
-            
-        # Simulate loading stages (will be replaced by actual loading milestones)
-        import time
-        update_progress(0.1, "Loading Python dependencies...")
-        time.sleep(0.2)
-        update_progress(0.3, "Initializing NLP modules...")
+        def update_progress(step_key, completed=True):
+            if step_key in init_steps:
+                init_steps[step_key]["completed"] = completed
+                progress_value = calculate_progress()
+                message = init_steps[step_key]["message"]
+                
+                # Update the progress bar and status message
+                progress_bar.progress(progress_value)
+                status_text.markdown(f"<div style='text-align: center; color: #4a86e8; font-size: 16px; margin-top: 10px; font-weight: 500;'>{message}</div>", unsafe_allow_html=True)
+                
+                # Small delay to make progress visible
+                time.sleep(0.1)
+
+# Start tracking dependencies
+update_progress("dependencies")
 
 # Check Python version - keep this simple, remove NumPy path info
 st.sidebar.info(f"Python version: {sys.version.split()[0]}")
@@ -57,7 +102,7 @@ st.sidebar.info(f"Python version: {sys.version.split()[0]}")
 try:
     import numpy as np
     # No need to show NumPy version in sidebar
-    update_progress(0.4, "NumPy loaded successfully...")
+    update_progress("numpy")
 except ImportError as e:
     st.error(f"Error importing NumPy: {str(e)}")
     st.stop()
@@ -68,14 +113,14 @@ except Exception as e:
         import subprocess
         subprocess.check_call([sys.executable, "-m", "pip", "install", "--force-reinstall", "numpy==1.26.3"])
         import numpy as np
-        update_progress(0.4, "NumPy fixed and loaded...")
+        update_progress("numpy")
     except Exception as e2:
         st.error(f"Failed to fix NumPy: {str(e2)}")
         st.stop()
 
 # Now import other dependencies that depend on numpy - simplified logging
 try:
-    update_progress(0.5, "Loading visualization libraries...")
+    update_progress("visualization")
     from matplotlib import pyplot as plt
     import matplotlib
     # Remove matplotlib version display
@@ -88,7 +133,7 @@ try:
         # Remove scikit-learn version display
         from sklearn.decomposition import PCA
         from sklearn.metrics.pairwise import cosine_similarity
-        update_progress(0.6, "ML libraries loaded...")
+        update_progress("ml_libs")
     except Exception as e:
         st.error(f"Error importing scikit-learn: {str(e)}")
         st.info("Trying to reinstall scikit-learn...")
@@ -97,7 +142,7 @@ try:
             from sklearn import __version__ as sklearn_version
             from sklearn.decomposition import PCA
             from sklearn.metrics.pairwise import cosine_similarity
-            update_progress(0.6, "ML libraries fixed and loaded...")
+            update_progress("ml_libs")
         except Exception as e2:
             st.error(f"Failed to fix scikit-learn: {str(e2)}")
     
@@ -189,6 +234,7 @@ try:
         if not model_downloaded:
             st.sidebar.info("Downloading benepar model...")
             helper.download_model()
+        update_progress("benepar")
     else:
         # Fall back to old implementation
         import nltk
@@ -212,11 +258,12 @@ try:
                 benepar.download('benepar_en3')
             except Exception as e:
                 st.sidebar.error(f"Error downloading benepar model: {str(e)}")
+        update_progress("benepar")
 except Exception as e:
     st.sidebar.warning(f"Benepar not available: {str(e)}")
 
-# Update progress
-update_progress(0.7, "Initializing NLP pipeline...")
+# Update progress for NLP pipeline
+update_progress("nlp_pipeline")
 
 # Initialize NLP pipeline with simplified log output
 with st.spinner("Setting up NLP models..."):
@@ -265,18 +312,18 @@ def get_encoder():
         st.info(f"Detailed error: {traceback.format_exc()}")
         return None
 
-# Update progress
-update_progress(0.85, "Loading Tree-LSTM encoder...")
+# Update progress for encoder loading
+update_progress("encoder", False)  # Mark as in progress
 
 # Initialize encoder with simplified log output
 with st.spinner("Loading Tree-LSTM encoder..."):
     encoder = get_encoder()
     if encoder:
         st.sidebar.success("Tree-LSTM encoder ready")
-        update_progress(0.95, "Finalizing application...")
+        update_progress("encoder", True)  # Mark as complete
     else:
         st.sidebar.error("Tree-LSTM encoder initialization failed")
-        update_progress(0.95, "Application initialization incomplete...")
+        update_progress("encoder", False)  # Mark as incomplete
     
 # Simplified hardware info display - extremely concise
 if encoder:
@@ -290,17 +337,23 @@ if encoder is None:
 
 # Mark initialization as complete
 init_complete = True
-update_progress(1.0, "Application ready!")
+
+# Final progress update - ensure we reach 100%
+for step in init_steps:
+    if not init_steps[step]["completed"]:
+        init_steps[step]["completed"] = True
+
+# Show 100% completion
+progress_bar.progress(1.0)
+status_text.markdown("<div style='text-align: center; color: #4a86e8; font-size: 16px; margin-top: 10px; font-weight: 500;'>Initialization complete</div>", unsafe_allow_html=True)
+
+# Small delay before hiding loading screen
 time.sleep(0.5)
 
 # Hide the loading screen once initialization is complete
-if init_complete:
-    loading_container.empty()
+loading_container.empty()
     
-    # Show welcome message after initialization
-    welcome_msg = st.success("Welcome to the Tree-LSTM Semantic Visualizer. Enter a sentence below to begin.")
-    time.sleep(3)  # Reduced time for better UX
-    welcome_msg.empty()
+# No welcome message - completely removed
 
 # Helper function to generate color gradient based on value
 def get_color(val, min_val, max_val):
@@ -606,18 +659,6 @@ if sentence:
             # 3D Visualization - Now in tab1 (first tab)
             with tab1:
                 st.subheader("3D Parse Tree with Semantic Layout")
-                
-                # Enhanced explanation
-                st.markdown("""
-                This visualization shows the parse tree in three dimensions, with semantic information determining node positions.
-                
-                **Node Properties:**
-                - **Position (X, Y)**: Reflects semantic dimensions from the hidden state
-                - **Position (Z)**: Reflects tree structure/depth
-                - **Size**: Proportional to semantic vector magnitude
-                - **Color**: Based on the third semantic dimension (h[2])
-                - **Hover text**: Shows node label and first few hidden state dimensions
-                """)
                 
                 # Visualization options
                 viz_mode = st.radio(
