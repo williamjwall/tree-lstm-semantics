@@ -596,6 +596,10 @@ if sentence:
         # Process sentence
         with st.spinner("Building parse tree..."):
             result = encoder.encode(sentence)
+            
+            # Get POS tags using spaCy
+            doc = nlp(sentence)
+            pos_tags = {token.i: token.pos_ for token in doc}
         
         # Create tabs for different visualizations - REORDERED to put 3D first
         tab1, tab2, tab3, tab4 = st.tabs([
@@ -619,7 +623,12 @@ if sentence:
                 span = tree['span']
                 if is_leaf and span[0] < len(sentence.split()):
                     token_text = sentence.split()[span[0]] if span[0] == span[1] - 1 else "..."
-                    label = f"{tree['label']}: {token_text}"
+                    # Add POS tag for leaf nodes that are individual tokens
+                    if span[0] == span[1] - 1 and span[0] < len(doc):
+                        pos_tag = pos_tags.get(span[0], "")
+                        label = f"{tree['label']}: {token_text} ({pos_tag})"
+                    else:
+                        label = f"{tree['label']}: {token_text}"
                 else:
                     # For non-leaf nodes, include the covered text
                     if span[0] < len(sentence.split()) and span[1] <= len(sentence.split()):
@@ -871,7 +880,13 @@ if sentence:
                         # Leaf node (token)
                         span = tree['span']
                         if span[0] == span[1] - 1:  # Single token
-                            label += f"\n→ '{sentence.split()[span[0]]}'" if span[0] < len(sentence.split()) else ""
+                            # Add POS tag for the token
+                            if span[0] < len(doc):
+                                pos_tag = pos_tags.get(span[0], "")
+                                token_text = sentence.split()[span[0]] if span[0] < len(sentence.split()) else ""
+                                label += f"\n→ '{token_text}' ({pos_tag})"
+                            else:
+                                label += f"\n→ '{sentence.split()[span[0]]}'" if span[0] < len(sentence.split()) else ""
                         dot.node(node_id, label)
                     
                     # Connect to parent
@@ -896,6 +911,17 @@ if sentence:
                 - **ADJP**: Adjective Phrase
                 - **ADVP**: Adverb Phrase
                 - **Numbers in parentheses**: Token span indices
+
+                **Part-of-Speech Tags:**
+                - **NOUN**: Nouns (dog, cat, tree)
+                - **VERB**: Verbs (run, eat, sleep)
+                - **ADJ**: Adjectives (big, red, beautiful)
+                - **ADV**: Adverbs (quickly, very, extremely)
+                - **PRON**: Pronouns (I, you, he, she, it)
+                - **DET**: Determiners (the, a, an, this)
+                - **ADP**: Adpositions/Prepositions (in, to, during)
+                - **CCONJ**: Coordinating conjunctions (and, or, but)
+                - **SCONJ**: Subordinating conjunctions (if, while, that)
 
                 **Note:** The span attribute indicates the range of token indices in the sentence that the node covers.
                 """)
