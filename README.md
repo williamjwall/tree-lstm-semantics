@@ -72,15 +72,4 @@ MIT License - See LICENSE file for details.
 ## Author
 
 [William Wall](https://github.com/williamjwall)
-
-## Project Structure
-
-```
-tree-lstm-generator/
-├── streamlit_app.py    # Main application
-├── src/                # Source code
-│   ├── tree_lstm_viz/  # Tree-LSTM implementation
-│   └── visualization/  # Visualization utilities
-├── models/             # Pre-trained models
-└── assets/             # Static assets
 ``` 
