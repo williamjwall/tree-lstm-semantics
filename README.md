@@ -1,5 +1,8 @@
 # Tree-LSTM Semantic Visualizer
 
+**NOTE** takes a few minutes for the app to launch
+
+
 An interactive tool for visualizing compositional semantics through constituency parse trees and Tree-LSTM networks. This project includes capabilities for both visualization and training custom Tree-LSTM models.
 
 ## Overview
