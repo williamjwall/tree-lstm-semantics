@@ -1,7 +1,5 @@
 # Tree-LSTM Semantic Visualizer
 
-An interactive tool for visualizing compositional semantics through constituency parse trees and Tree-LSTM networks. This project includes visualization capabilities for bottom-up, top-down, and bidirectional Tree-LSTM models.
-
 ## Overview
 
 This project provides an intuitive interface for exploring how distributed semantic representations are composed in Tree-structured LSTMs, combining:
@@ -106,26 +104,3 @@ MIT License - See LICENSE file for details.
 ## Author
 
 [William Wall](https://github.com/williamjwall)
-
-## Project Structure
-
-```
-tree-lstm-generator/
-├── streamlit_app.py          # Main application
-├── src/
-│   ├── tree_lstm_viz/        # Tree-LSTM implementations
-│   │   ├── model.py          # Bottom-up TreeLSTM (original)
-│   │   ├── top_down_model.py # Top-down TreeLSTM
-│   │   ├── model_bidirectional.py # Bidirectional TreeLSTM
-│   │   ├── benepar_utils.py  # Berkeley Parser utilities
-│   │   └── logger.py         # Structured logging
-│   ├── visualization/        # Visualization utilities
-│   └── utils/                # Helper utilities
-├── setup.sh                  # Installation script
-└── requirements.txt          # Dependencies
-``` 
-
-## References and Further Reading
-
-- Tai, K. S., Socher, R., & Manning, C. D. (2015). [Improved semantic representations from tree-structured long short-term memory networks](https://aclanthology.org/P15-1150.pdf). ACL.
-- Zhang, X., Lu, L., & Lapata, M. (2016). [Top-down tree long short-term memory networks](https://aclanthology.org/N16-1035.pdf). NAACL. 
