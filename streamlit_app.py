@@ -95,9 +95,6 @@ with loading_container:
 # Start tracking dependencies
 update_progress("dependencies")
 
-# Check Python version - keep this simple, remove NumPy path info
-st.sidebar.info(f"Python version: {sys.version.split()[0]}")
-
 # Check for numpy compatibility - simplified
 try:
     import numpy as np
@@ -272,59 +269,102 @@ with st.spinner("Setting up NLP models..."):
         st.sidebar.error("NLP pipeline initialization failed")
 
 # Initialize encoder
+# Add option for processing direction outside the cached function
+direction = st.sidebar.radio(
+    "TreeLSTM Processing Direction:",
+    ["Bottom-Up (Default)", "Top-Down", "Bidirectional"],
+    index=0
+)
+
+# Map selection to model mode
+mode_map = {
+    "Bottom-Up (Default)": "bottom-up",
+    "Top-Down": "top-down",
+    "Bidirectional": "both"
+}
+mode = mode_map[direction]
+
 @st.cache_resource
-def get_encoder():
+def get_encoder(mode="bottom-up"):
     try:
-        # First try standard model
+        # Try bidirectional model first
         try:
-            from src.tree_lstm_viz.model import TreeLSTMEncoder
-            # No need to log this to sidebar
+            from src.tree_lstm_viz.model_bidirectional import BidirectionalTreeLSTMEncoder
             
-            # Now try to initialize the encoder (which will handle Benepar setup internally)
-            encoder = TreeLSTMEncoder()
+            # Now try to initialize the encoder with selected mode
+            encoder = BidirectionalTreeLSTMEncoder(mode=mode)
             
             # Test the encoder with a simple sentence to verify it works
             test_result = encoder.encode("This is a test.")
             if test_result:
-                # No need for success message
-                pass
-            return encoder
+                return encoder, "bidirectional", None
         except ImportError as e:
-            # Try alternative model
+            # Fall back to standard model
             try:
-                from src.tree_lstm_viz.model_alt import TreeLSTMEncoder
+                from src.tree_lstm_viz.model import TreeLSTMEncoder
+                
+                # Now try to initialize the encoder (which will handle Benepar setup internally)
+                encoder = TreeLSTMEncoder()
+                
+                # Test the encoder with a simple sentence to verify it works
+                test_result = encoder.encode("This is a test.")
+                if test_result:
+                    return encoder, "standard", None
+            except ImportError as e:
+                # Try alternative model
                 try:
-                    encoder = TreeLSTMEncoder()
-                    # Test the encoder with a simple sentence
-                    test_result = encoder.encode("This is a test.")
-                    return encoder
-                except Exception as e:
-                    st.error(f"Error initializing alternative TreeLSTMEncoder: {str(e)}")
-                    return None
-            except ImportError:
-                st.error("Could not import TreeLSTMEncoder")
-                return None
+                    from src.tree_lstm_viz.model_alt import TreeLSTMEncoder
+                    try:
+                        encoder = TreeLSTMEncoder()
+                        # Test the encoder with a simple sentence
+                        test_result = encoder.encode("This is a test.")
+                        return encoder, "alternative", None
+                    except Exception as e:
+                        return None, None, f"Error initializing alternative TreeLSTMEncoder: {str(e)}"
+                except ImportError:
+                    return None, None, "Could not import any TreeLSTMEncoder"
+            except Exception as e:
+                return None, None, f"Error initializing TreeLSTMEncoder: {str(e)}"
         except Exception as e:
-            st.error(f"Error initializing TreeLSTMEncoder: {str(e)}")
-            return None
+            return None, None, f"Error initializing BidirectionalTreeLSTMEncoder: {str(e)}"
     except Exception as e:
-        st.error(f"Unexpected error in get_encoder: {str(e)}")
-        st.info(f"Detailed error: {traceback.format_exc()}")
-        return None
+        return None, None, f"Unexpected error in get_encoder: {str(e)}\n{traceback.format_exc()}"
 
 # Update progress for encoder loading
 update_progress("encoder", False)  # Mark as in progress
 
 # Initialize encoder with simplified log output
 with st.spinner("Loading Tree-LSTM encoder..."):
-    encoder = get_encoder()
-    if encoder:
-        st.sidebar.success("Tree-LSTM encoder ready")
-        update_progress("encoder", True)  # Mark as complete
-    else:
-        st.sidebar.error("Tree-LSTM encoder initialization failed")
-        update_progress("encoder", False)  # Mark as incomplete
+    result = get_encoder(mode)
     
+    if isinstance(result, tuple):
+        encoder, model_type, error = result
+        
+        if encoder:
+            # Convert mode to display-friendly format
+            display_mode = {"bottom-up": "Bottom-Up", "top-down": "Top-Down", "both": "Bidirectional"}
+            if model_type == "bidirectional":
+                st.sidebar.success(f"Using {display_mode.get(mode, mode)} TreeLSTM")
+            elif model_type == "standard":
+                st.sidebar.success("Using Bottom-Up TreeLSTM (Legacy)")
+            elif model_type == "alternative":
+                st.sidebar.success("Using Alternative TreeLSTM")
+                
+            update_progress("encoder", True)  # Mark as complete
+        else:
+            if error:
+                st.error(error)
+            st.sidebar.error("Tree-LSTM encoder initialization failed")
+            update_progress("encoder", False)  # Mark as incomplete
+    else:
+        encoder = result
+        if encoder:
+            st.sidebar.success("Tree-LSTM encoder ready")
+            update_progress("encoder", True)  # Mark as complete
+        else:
+            st.sidebar.error("Tree-LSTM encoder initialization failed")
+            update_progress("encoder", False)  # Mark as incomplete
+
 # Simplified hardware info display - extremely concise
 if encoder:
     import torch
@@ -528,6 +568,31 @@ if init_complete:  # Only show content when initialization is complete
         - The relationship between a parent's meaning and its children's meanings
         """)
 
+    with st.expander("Root-Centric View (Visualization Guide)", expanded=False):
+        st.markdown("""
+        ## Root-Centric View (Top-Down Mode Only)
+        
+        **What you're seeing:**
+        This visualization highlights how information radiates from the root node to all other nodes in the tree during top-down processing.
+        
+        **How it works:**
+        - The **root node** is positioned at the center (0,0,0)
+        - Other nodes are arranged in a radial pattern around the root
+        - The **distance from center** represents semantic difference from the root
+        - The **vertical position** (Z) still represents the grammatical depth
+        - **Node sizes** decrease as you move deeper into the tree
+        
+        **Why it's useful:**
+        This approach emphasizes how the top-down process distributes contextual information from the root node
+        to all other nodes. It makes it easier to see which parts of the tree receive more influence from the root.
+        
+        **What to look for:**
+        - Nodes clustered near the root are semantically similar to the overall sentence meaning
+        - Patterns of how information flows down through the tree levels
+        - How different branches of the tree receive different aspects of the root's context
+        - The balance between maintaining the root's meaning and developing specialized meaning in branches
+        """)
+
     with st.expander("Semantic Similarity Heatmap (Visualization Guide)", expanded=False):
         st.markdown("""
         ## Semantic Similarity Heatmap
@@ -609,6 +674,161 @@ if init_complete:  # Only show content when initialization is complete
                 "Structural Analysis"
             ])
             
+            # Display information about the Tree-LSTM mode used
+            processing_mode = result.get("mode", "bottom-up")  # Default to bottom-up for backward compatibility
+            mode_descriptions = {
+                "bottom-up": "Bottom-Up processing: Information flows from leaves to root, capturing compositional meaning",
+                "top-down": "Top-Down processing: Information flows from root to leaves, distributing context to parts",
+                "both": "Bidirectional processing: Combines both bottom-up and top-down approaches for richer representations"
+            }
+            
+            st.info(mode_descriptions.get(processing_mode, "Standard Tree-LSTM processing"))
+
+            # Add detailed explanation about the different processing modes
+            with st.expander("Understanding TreeLSTM Processing Directions", expanded=False):
+                st.markdown("""
+                ## TreeLSTM Processing Directions Explained
+
+                The direction of information flow in a Tree-LSTM has profound implications for how meaning is constructed and represented. Our `BidirectionalTreeLSTMEncoder` allows you to explore these different approaches. Each direction captures distinct aspects of linguistic structure.
+
+                ### Bottom-Up Processing (Leaves to Root)
+
+                **Our Implementation:** Uses `ChildSumTreeLSTM`.
+                
+                **How it works:**
+                - Information flows from leaf nodes (individual words) upward to the root node (complete sentence).
+                - Each parent node's representation is computed by combining information from all its children.
+                - The `h` and `c` states stored in each node (and used for visualization) are the direct outputs of this bottom-up pass (`h_bottom_up`, `c_bottom_up`).
+                - The root node's final hidden state (`h`) contains a representation of the entire sentence, composed hierarchically.
+
+                **Core Mechanism:**
+                - Each node takes inputs from its child nodes (or word embeddings for leaf nodes)
+                - The model uses gates (input, output, and forget gates) to control information flow
+                - Key innovation: Uses separate forget gates for each child, allowing the node to selectively remember or forget information from each child
+                - This selective forgetting is crucial for handling different syntactic and semantic relationships
+                - The final representation combines filtered information from all children with the node's own transformation
+                
+                **Strengths:**
+                - Excellent for capturing compositional meaning (how parts combine to create the whole).
+                - Naturally reflects syntactic structure and dependencies.
+                - Well-suited for tasks like sentiment analysis or text classification where understanding the overall composition is key.
+
+                **Limitations:**
+                - Nodes lower in the tree (e.g., individual words) have no direct contextual information from higher-level constituents or the overall sentence meaning during their computation.
+                - May struggle with long-distance dependencies if the information is not effectively propagated upwards.
+
+                ### Top-Down Processing (Root to Leaves)
+
+                **Our Implementation:** Uses `TopDownTreeLSTM`.
+
+                **How it works:**
+                - Information flows from the root node (representing the whole sentence context) downward to the leaf nodes (individual words).
+                - Parent nodes provide contextual information that influences the computation of their children's representations.
+                - The `h` and `c` states stored in each node (and used for visualization) are the direct outputs of this top-down pass (`h_top_down`, `c_top_down`).
+                - Leaf nodes ultimately receive a representation that incorporates both their local input (e.g., word embedding) and the context passed down from the entire tree.
+
+                **Core Mechanism:**
+                - Each node receives context from its parent node (except the root, which starts the process)
+                - Similar gate structure (input, output, forget gates) as bottom-up, but used differently
+                - Uses a single forget gate to control how much parent information to incorporate
+                - The node combines its own input with filtered information from its parent
+                - This allows contextual information to flow downward and influence interpretation of parts
+
+                **Strengths:**
+                - Excellent for contextual understanding, as it allows the meaning of the whole sentence to influence the interpretation of its parts.
+                - Helps in disambiguating word meanings based on the broader sentence context.
+                - Well-suited for tasks like conditional text generation or question answering where context is paramount.
+
+                **Limitations:**
+                - The initial representation of the root might be less informed before the top-down pass fully propagates context.
+                - Can sometimes overemphasize global context at the expense of fine-grained local distinctions if not balanced.
+
+                ### Bidirectional Processing (Combined)
+
+                **Our Implementation:** Leverages both `ChildSumTreeLSTM` and `TopDownTreeLSTM`.
+
+                **How it works:**
+                - First, a complete bottom-up pass is performed using `ChildSumTreeLSTM`, yielding `h_bottom_up` and `c_bottom_up` for each node.
+                - Then, a complete top-down pass is performed using `TopDownTreeLSTM`, yielding `h_top_down` and `c_top_down` for each node, using the same initial word embeddings.
+                - The final hidden state `h` and cell state `c` for each node (used for visualization) are created by **combining** the outputs from both passes. In our current `BidirectionalTreeLSTMEncoder`, this combination is done via element-wise addition:
+                    - `node.h = node.h_bottom_up + node.h_top_down`
+                    - `node.c = node.c_bottom_up + node.c_top_down`
+                - This allows each node's final representation to benefit from both compositional information from its descendants and contextual information from its ancestors and the sentence root.
+
+                **Core Mechanism:**
+                - Two separate passes through the tree, each with its own strengths
+                - Bottom-up pass captures compositional structure (how parts form wholes)
+                - Top-down pass captures contextual influences (how the whole affects parts)
+                - Simple addition combines these complementary views for each node
+                - Result is a richer representation that benefits from both perspectives
+
+                **Strengths:**
+                - Combines the advantages of both bottom-up and top-down approaches, capturing both compositional and contextual semantics.
+                - Generally leads to richer and more nuanced representations.
+                - Often achieves state-of-the-art performance on a wide range of NLP tasks.
+
+                **Limitations:**
+                - Increased computational complexity as it requires two passes over the tree.
+                - More parameters in the model if distinct TreeLSTMs are used for each direction.
+                - The method of combining the two representations (e.g., addition, concatenation, gating) can influence performance and may need tuning.
+
+                ### Visualization Differences
+
+                The chosen processing direction directly impacts what the `h` vector at each node represents, and thus how the visualizations should be interpreted:
+
+                - **Bottom-Up Mode**: Node vectors `h` are `h_bottom_up`. Visualizations primarily show how meaning is composed from words upwards. Leaf nodes are processed first based on their embeddings, and internal nodes aggregate this information.
+                - **Top-Down Mode**: Node vectors `h` are `h_top_down`. Visualizations emphasize how context from the root (entire sentence) is distributed downwards to influence child nodes. The root is initialized, and its state influences its children, and so on.
+                - **Bidirectional Mode**: Node vectors `h` are the combination (e.g., sum) of `h_bottom_up` and `h_top_down`. Visualizations reflect this richer representation, where each node's meaning is informed by both its constituents and its context within the larger tree.
+
+                ### Visual Comparison of Information Flow in Our Encoder
+
+                The diagrams below illustrate how the `h` and `c` states are populated in each node based on the selected mode in our `BidirectionalTreeLSTMEncoder`.
+
+                ```
+                Bottom-Up (mode='bottom-up')      Top-Down (mode='top-down')        Bidirectional (mode='both')
+                (h = h_bottom_up)                 (h = h_top_down)                  (h = h_bottom_up + h_top_down)
+
+                      ↑ h_bu                         ↓ h_td                         ↕ (h_bu, h_td combined)
+                     [S]                            [S]                             [S]
+                     ↗ ↖                           ↙ ↘                             ↕ ↕
+                   [NP] [VP]                      [NP] [VP]                       [NP] [VP]
+                   ↗ ↖  ↗ ↖                      ↙ ↘  ↙ ↘                        ↕ ↕  ↕ ↕
+                 [D] [N][V] [A]                  [D] [N][V] [A]                  [D] [N][V] [A]
+                  ↑   ↑  ↑   ↑                    ↓   ↓  ↓   ↑                    ↕   ↕  ↕   ↕
+                 (The)(cat)(is)(fat)            (The)(cat)(is)(fat)              (The)(cat)(is)(fat)
+
+                Processing:                       Processing:                     Processing:
+                1. `ChildSumTreeLSTM` pass        1. `TopDownTreeLSTM` pass       1. `ChildSumTreeLSTM` pass (gets h_bu, c_bu)
+                2. `h = h_bottom_up`              2. `h = h_top_down`               2. `TopDownTreeLSTM` pass (gets h_td, c_td)
+                                                                                  3. `h = h_bu + h_td`
+                ```
+
+                ### Analogies to Human Language Processing
+
+                - **Bottom-Up**: Similar to how we might first identify individual words, then combine them into phrases, and finally grasp the overall sentence meaning.
+                - **Top-Down**: Akin to how our existing knowledge and the overall context of a conversation or text help us interpret and disambiguate words and phrases as we encounter them.
+                - **Bidirectional**: Most closely mirrors sophisticated human language processing, where we simultaneously build meaning from parts and use context to refine our understanding.
+
+                ### Real-World Application Examples
+
+                **Bottom-Up Processing:**
+                - **Sentiment Analysis**: Determining whether a review is positive or negative by composing sentiment from individual words and phrases upward.
+                - **Text Classification**: Categorizing documents based on the compositional meaning of their contents.
+                - **Information Extraction**: Identifying entities and relationships by building up from word-level patterns.
+
+                **Top-Down Processing:**
+                - **Word Sense Disambiguation**: Using sentence context to determine correct meaning of ambiguous words (e.g., "bank" as financial institution vs. riverside).
+                - **Question Answering**: Contextualizing words and phrases in a passage based on the question being asked.
+                - **Text Generation**: Producing coherent text by maintaining global context through the generation process.
+
+                **Bidirectional Processing:**
+                - **Machine Translation**: Capturing both local compositional meaning and global context for accurate translations.
+                - **Text Summarization**: Understanding both detailed content and overall meaning to create concise summaries.
+                - **Language Understanding in Dialogue Systems**: Interpreting user inputs by combining word-level understanding with contextual knowledge.
+
+                Our `BidirectionalTreeLSTMEncoder` provides the flexibility to experiment with these processing strategies. The bidirectional approach, while computationally more intensive, often yields the most comprehensive semantic representations.
+                """)
+
             # Extract all hidden states from the tree for use in all visualizations
             all_vectors = []
             node_info = []
@@ -669,10 +889,41 @@ if init_complete:  # Only show content when initialization is complete
                 with tab1:
                     st.subheader("3D Parse Tree with Semantic Layout")
                     
+                    # Add description based on processing mode
+                    if processing_mode == "both":
+                        st.markdown("""
+                        This 3D visualization shows the tree structure with bidirectional semantic information:
+                        * Nodes are color-coded based on their semantic values
+                        * The representation combines both bottom-up and top-down processing
+                        * This provides a richer view of the sentence structure and meaning
+                        """)
+                    elif processing_mode == "top-down":
+                        st.markdown("""
+                        This 3D visualization shows the tree structure with top-down semantic information:
+                        * Nodes are color-coded based on their semantic values
+                        * Information flows from the root node down to the leaves
+                        * This highlights how context is distributed throughout the tree
+                        
+                        **Try the "Root-Centric View" mode** to see how information radiates from the root to other nodes.
+                        In this view, the root node is at the center, and other nodes are arranged by their semantic similarity to the root.
+                        """)
+                    else:
+                        st.markdown("""
+                        This 3D visualization shows the tree structure with semantic information:
+                        * Nodes are color-coded based on their semantic values
+                        * Information flows from the leaves up to the root
+                        * This highlights the compositional nature of the sentence
+                        """)
+                    
                     # Visualization options
+                    if processing_mode == "top-down":
+                        viz_options = ["Tree Structure + Semantic Dimensions", "Pure Semantic Space (PCA)", "Hybrid View", "Root-Centric View"]
+                    else:
+                        viz_options = ["Tree Structure + Semantic Dimensions", "Pure Semantic Space (PCA)", "Hybrid View"]
+                    
                     viz_mode = st.radio(
                         "Visualization Mode:",
-                        ["Tree Structure + Semantic Dimensions", "Pure Semantic Space (PCA)", "Hybrid View"],
+                        viz_options,
                         index=0,
                         help="Choose how to visualize the tree in 3D space"
                     )
@@ -715,6 +966,50 @@ if init_complete:  # Only show content when initialization is complete
                             pos_y = semantic_coords[i, 1] * scale
                             pos_z = semantic_coords[i, 2] * scale
                             
+                        elif viz_mode == "Root-Centric View" and processing_mode == "top-down":
+                            # Special visualization for top-down processing
+                            # Use the first node (root) as the center
+                            if i == 0:  # Root node
+                                pos_x = 0  # Center
+                                pos_y = 0
+                                pos_z = 0
+                                size = 20  # Larger size for root
+                            else:
+                                # Calculate distance from root in vector space 
+                                root_vec = all_vectors[0]
+                                distance = np.linalg.norm(vec - root_vec)
+                                
+                                # Use distance for radial positioning
+                                angle = i * 2 * np.pi / (len(all_vectors) - 1)  # Distribute around a circle
+                                radius = distance * scale * 0.5
+                                
+                                # Position based on level and angle
+                                pos_x = radius * np.cos(angle)
+                                pos_y = radius * np.sin(angle)
+                                pos_z = -level * 5  # Exaggerate level difference to show hierarchy
+                                
+                                # Size based on level (smaller as we go deeper)
+                                size = 15 - level * 1.5
+                                sizes.append(size)
+                                
+                                # Add edge from parent node
+                                if parent_idx >= 0:
+                                    x_edges.extend([x[parent_idx], pos_x, None])
+                                    y_edges.extend([y[parent_idx], pos_y, None])
+                                    z_edges.extend([z[parent_idx], pos_z, None])
+                                
+                                # Skip the normal edge addition later by continuing
+                                x.append(pos_x)
+                                y.append(pos_y)
+                                z.append(pos_z)
+                                labels.append(info['label'])
+                                
+                                # Determine color based on 3rd semantic dimension
+                                color_val = vec[2]
+                                colors.append(color_val)
+                                
+                                continue
+                            
                         else:  # Hybrid View
                             # Use tree level for z but semantic values for x, y
                             pos_x = semantic_coords[i, 0] * scale
@@ -728,17 +1023,18 @@ if init_complete:  # Only show content when initialization is complete
                         
                         labels.append(info['label'])
                         
-                        # Use fixed size for all nodes
-                        size = 12  # Fixed size for all nodes
-                        sizes.append(size)
+                        # Use fixed size for all nodes except in Root-Centric view
+                        if viz_mode != "Root-Centric View" or i == 0:
+                            size = 12  # Fixed size for all nodes
+                            sizes.append(size)
                         
                         # Determine color based on 3rd semantic dimension
                         # Use a consistent dimension for coloring
                         color_val = vec[2]
                         colors.append(color_val)
                         
-                        # Add edge from parent node if exists
-                        if parent_idx >= 0:
+                        # Add edge from parent node if exists and we haven't already done it
+                        if parent_idx >= 0 and viz_mode != "Root-Centric View":
                             x_edges.extend([x[parent_idx], pos_x, None])
                             y_edges.extend([y[parent_idx], pos_y, None])
                             z_edges.extend([z[parent_idx], pos_z, None])
@@ -800,10 +1096,28 @@ if init_complete:  # Only show content when initialization is complete
                         x_title = "PCA Dimension 1"
                         y_title = "PCA Dimension 2"
                         z_title = "PCA Dimension 3"
+                    elif viz_mode == "Root-Centric View":
+                        x_title = "Semantic Distance from Root (X)"
+                        y_title = "Semantic Distance from Root (Y)"
+                        z_title = "Tree Level (Syntax)"
                     else:  # Hybrid view
                         x_title = "Semantic PCA Dimension 1"
                         y_title = "Semantic PCA Dimension 2"
                         z_title = "Tree Level (Syntax)"
+                    
+                    # Setup camera based on visualization mode
+                    if viz_mode == "Root-Centric View":
+                        camera = dict(
+                            up=dict(x=0, y=0, z=1),
+                            center=dict(x=0, y=0, z=0),
+                            eye=dict(x=0.1, y=0.1, z=2.0)  # Top-down view looking at the root
+                        )
+                    else:
+                        camera = dict(
+                            up=dict(x=0, y=0, z=1),
+                            center=dict(x=0, y=0, z=0),
+                            eye=dict(x=1.5, y=-1.5, z=0.5)
+                        )
                     
                     fig.update_layout(
                         scene=dict(
@@ -812,11 +1126,7 @@ if init_complete:  # Only show content when initialization is complete
                             zaxis=dict(title=z_title, title_font=axis_title_font)
                         ),
                         margin=dict(l=0, r=0, b=0, t=0),
-                        scene_camera=dict(
-                            up=dict(x=0, y=0, z=1),
-                            center=dict(x=0, y=0, z=0),
-                            eye=dict(x=1.5, y=-1.5, z=0.5)
-                        ),
+                        scene_camera=camera,
                         legend=dict(
                             yanchor="top",
                             y=0.99,
@@ -852,13 +1162,37 @@ if init_complete:  # Only show content when initialization is complete
                 with tab2:
                     st.subheader("Constituency Parse Tree")
                     
-                    st.markdown("""
-                    This is a traditional top-down tree visualization showing the grammatical structure of the sentence.
-                    Each node shows:
-                    - The grammatical category (NP, VP, S, etc.)
-                    - The span of tokens it covers in the sentence
-                    - For leaf nodes, the actual token text
-                    """)
+                    # Add description based on processing mode
+                    if processing_mode == "both":
+                        st.markdown("""
+                        This is a traditional top-down tree visualization showing the constituency structure of the sentence.
+                        
+                        **Bidirectional Processing:**
+                        - Bottom-up: Information flows from leaves to root (compositional meaning)
+                        - Top-down: Information flows from root to leaves (contextual distribution)
+                        - The hidden states combine information from both directions
+                        
+                        Each node shows the grammatical category (NP, VP, S, etc.) and the span of tokens it covers.
+                        """)
+                    elif processing_mode == "top-down":
+                        st.markdown("""
+                        This is a traditional top-down tree visualization showing the constituency structure of the sentence.
+                        
+                        **Top-Down Processing:**
+                        - Information flows from the root down to the leaves
+                        - Parent nodes provide context to their children
+                        - This method is good for tasks requiring contextual understanding
+                        
+                        Each node shows the grammatical category (NP, VP, S, etc.) and the span of tokens it covers.
+                        """)
+                    else:
+                        st.markdown("""
+                        This is a traditional top-down tree visualization showing the grammatical structure of the sentence.
+                        Each node shows:
+                        - The grammatical category (NP, VP, S, etc.)
+                        - The span of tokens it covers in the sentence
+                        - For leaf nodes, the actual token text
+                        """)
                     
                     # Create Graphviz visualization
                     dot = graphviz.Digraph()
@@ -1028,10 +1362,27 @@ if init_complete:  # Only show content when initialization is complete
                     st.subheader("Phrasal Structure Diagram")
                     
                     # Extra explanation
-                    st.markdown("""
-                    This visualization shows the hierarchical structure of the parse tree in a simplified format.
-                    Colors represent the same semantic dimension (3) used in the 3D visualization.
-                    """)
+                    if processing_mode == "both":
+                        st.markdown("""
+                        This visualization shows the hierarchical structure of the parse tree with bidirectional processing.
+                        * Bottom-up: Information flows from leaves to root, capturing compositional meaning
+                        * Top-down: Information flows from root to leaves, distributing context to parts
+                        * Combined: The shown values represent the combined bidirectional representation
+                        
+                        Colors represent the semantic dimension (3) in the combined representation.
+                        """)
+                    elif processing_mode == "top-down":
+                        st.markdown("""
+                        This visualization shows the hierarchical structure of the parse tree with top-down processing.
+                        Information flows from the root to the leaves, enabling context distribution from parent nodes to children.
+                        
+                        Colors represent the semantic dimension (3) in the top-down representation.
+                        """)
+                    else:
+                        st.markdown("""
+                        This visualization shows the hierarchical structure of the parse tree in a simplified format.
+                        Colors represent the same semantic dimension (3) used in the 3D visualization.
+                        """)
                     
                     # Create a simpler tree representation
                     with st.spinner("Building hierarchical tree data..."):
