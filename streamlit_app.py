@@ -455,15 +455,15 @@ if init_complete:  # Only show content when initialization is complete
         | Element | What It Represents |
         |---------|-------------------|
         | **Node Position** | In 3D space, positions reflect semantic dimensions - similar meanings appear closer together. For example, words like "river" and "bank" might cluster near each other if they share semantic properties, even if they're far apart in the sentence structure. |
-        | **Node Color** | Based on PCA components of the hidden states - representing the most significant semantic variance in the data. This captures meaningful patterns in the semantic space rather than arbitrary dimensions. Blue/purple nodes have different semantic qualities than yellow/green ones along this principal axis. |
+        | **Node Color** | Based on similarity to the root node - representing how much each constituent contributes to the overall sentence meaning. Higher similarity (warmer colors) indicates constituents that are more central to the sentence's core meaning, while lower similarity (cooler colors) indicates more peripheral or modifying elements. |
         | **Tree Connections** | Show the compositional structure - how meanings combine hierarchically from words to phrases to full sentences. These connections reveal how the Tree-LSTM builds complex meanings from simpler components. |
         | **Span Attribute** | Indicates which tokens (by index) each node covers in the original sentence. For example, a span of [2,5] means this node represents the meaning of words 2 through 4 in the sentence (exclusive of 5). This helps you map tree nodes back to the text. |
         
         ### Color Spectrum Interpretation
         
-        - **Purple/Blue** nodes have lower values in the principal semantic component
-        - **Green/Yellow** nodes have higher values
-        - This component represents the direction of maximum variance in the semantic space, capturing the most important semantic distinctions
+        - **Purple/Blue** nodes have lower similarity to the root (more peripheral to the main meaning)
+        - **Green/Yellow** nodes have higher similarity to the root (more central to the main meaning)
+        - This metric shows how much each constituent contributes to the overall sentence meaning
         
         ### Visual Example
         
@@ -471,8 +471,8 @@ if init_complete:  # Only show content when initialization is complete
         
         - A node at the top represents the entire sentence meaning (S)
         - Nodes below represent "The hungry cat" (NP) and "quickly ate the small fish" (VP)
-        - Individual word nodes have different colors based on their semantic properties
-        - "Cat" and "fish" (nouns/entities) might have similar colors, while "ate" (action) could have a different color
+        - Individual word nodes have different colors based on their similarity to the root sentence meaning
+        - Core elements like "cat" and "ate" might have warmer colors (higher similarity to root), while modifiers like "quickly" might have cooler colors
         - The span [3,4] would indicate the word "cat" (the 4th word, counting from 0)
         - Semantically related words like "cat" and "fish" might appear closer in the semantic space view
         
@@ -872,14 +872,14 @@ if init_complete:  # Only show content when initialization is complete
                     if processing_mode == "both":
                         st.markdown("""
                         This 3D visualization shows the tree structure with bidirectional semantic information:
-                        * Nodes are color-coded based on PCA components (capturing the most important semantic variance)
+                        * Nodes are color-coded based on similarity to the root node (how much each constituent contributes to overall sentence meaning)
                         * The representation combines both bottom-up and top-down processing
                         * This provides a richer view of the sentence structure and meaning
                         """)
                     elif processing_mode == "top-down":
                         st.markdown("""
                         This 3D visualization shows the tree structure with top-down semantic information:
-                        * Nodes are color-coded based on PCA components (capturing the most important semantic variance)
+                        * Nodes are color-coded based on similarity to the root node (how much each constituent contributes to overall sentence meaning)
                         * Information flows from the root node down to the leaves
                         * This highlights how context is distributed throughout the tree
                         
@@ -889,7 +889,7 @@ if init_complete:  # Only show content when initialization is complete
                     else:
                                             st.markdown("""
                     This 3D visualization shows the tree structure with semantic information:
-                    * Nodes are color-coded based on PCA components (capturing the most important semantic variance)
+                    * Nodes are color-coded based on similarity to the root node (how much each constituent contributes to overall sentence meaning)
                     * Information flows from the leaves up to the root
                     * This highlights the compositional nature of the sentence
                     """)
@@ -907,14 +907,13 @@ if init_complete:  # Only show content when initialization is complete
                         help="Choose how to visualize the tree in 3D space"
                     )
                     
-                    # Apply PCA for semantic dimensions if needed
-                    if viz_mode in ["Pure Semantic Space (PCA)", "Tree Structure + PCA"]:
-                        pca = PCA(n_components=4)  # Get 4 components: 3 for position + 1 for color
-                        semantic_coords = pca.fit_transform(vectors_array)
-                    else:
-                        # For Root-Centric view, still compute PCA for coloring
-                        pca = PCA(n_components=1)  # Just need 1 component for color
-                        pca_color_coords = pca.fit_transform(vectors_array)
+                    # Always apply PCA with consistent components for all visualization modes
+                    pca = PCA(n_components=3)  # Always use 3 components for consistency
+                    semantic_coords = pca.fit_transform(vectors_array)
+                    
+                    # Calculate similarity to root for color metric
+                    root_vector = vectors_array[0]  # First vector is the root
+                    root_similarities = cosine_similarity(vectors_array, root_vector.reshape(1, -1)).flatten()
                     
                     # Generate 3D coordinates for each node
                     x, y, z = [], [], []
@@ -980,8 +979,8 @@ if init_complete:  # Only show content when initialization is complete
                                 z.append(pos_z)
                                 labels.append(info['label'])
                                 
-                                # Determine color based on PCA component
-                                color_val = pca_color_coords[i, 0]  # Use first PCA component for color
+                                # Determine color based on similarity to root
+                                color_val = root_similarities[i]  # Use similarity to root for color
                                 colors.append(color_val)
                                 
                                 continue
@@ -1004,16 +1003,8 @@ if init_complete:  # Only show content when initialization is complete
                             size = 12  # Fixed size for all nodes
                             sizes.append(size)
                         
-                        # Determine color based on PCA component
-                        if viz_mode in ["Pure Semantic Space (PCA)", "Tree Structure + PCA"]:
-                            # Use 4th PCA component for color (if available, otherwise use 1st)
-                            if semantic_coords.shape[1] >= 4:
-                                color_val = semantic_coords[i, 3]  # 4th PCA component
-                            else:
-                                color_val = semantic_coords[i, 0]  # Fallback to 1st component
-                        else:
-                            # For Root-Centric view, use the dedicated PCA color component
-                            color_val = pca_color_coords[i, 0]
+                        # Determine color based on similarity to root - more meaningful than PCA component
+                        color_val = root_similarities[i]  # Use similarity to root for color
                         colors.append(color_val)
                         
                         # Add edge from parent node if exists and we haven't already done it
@@ -1058,11 +1049,11 @@ if init_complete:  # Only show content when initialization is complete
                             color=normalized_colors,
                             colorscale='Viridis',
                             opacity=0.8,
-                            colorbar=dict(title="PCA Component" if viz_mode in ["Pure Semantic Space (PCA)", "Tree Structure + PCA"] else "PCA Component")
+                            colorbar=dict(title="Similarity to Root")
                         ),
                         # text= removed to avoid DOM issues
-                        hovertext=[f"{l}<br>Hidden[0:3]=[{v[0]:.2f}, {v[1]:.2f}, {v[2]:.2f}]" 
-                                  for l, v in zip(labels, all_vectors)],
+                        hovertext=[f"{l}<br>Similarity to Root: {root_similarities[i]:.3f}<br>Hidden[0:3]=[{v[0]:.2f}, {v[1]:.2f}, {v[2]:.2f}]" 
+                                  for i, (l, v) in enumerate(zip(labels, all_vectors))],
                         hoverinfo='text',
                         name='Tree Nodes'
                     ))
