@@ -455,15 +455,15 @@ if init_complete:  # Only show content when initialization is complete
         | Element | What It Represents |
         |---------|-------------------|
         | **Node Position** | In 3D space, positions reflect semantic dimensions - similar meanings appear closer together. For example, words like "river" and "bank" might cluster near each other if they share semantic properties, even if they're far apart in the sentence structure. |
-        | **Node Color** | Based on the 3rd dimension of the hidden state (h[2]) - a key semantic feature that often correlates with properties like concreteness vs. abstractness, or entity vs. action. Blue/purple nodes typically have different semantic qualities than yellow/green ones. |
+        | **Node Color** | Based on PCA components of the hidden states - representing the most significant semantic variance in the data. This captures meaningful patterns in the semantic space rather than arbitrary dimensions. Blue/purple nodes have different semantic qualities than yellow/green ones along this principal axis. |
         | **Tree Connections** | Show the compositional structure - how meanings combine hierarchically from words to phrases to full sentences. These connections reveal how the Tree-LSTM builds complex meanings from simpler components. |
         | **Span Attribute** | Indicates which tokens (by index) each node covers in the original sentence. For example, a span of [2,5] means this node represents the meaning of words 2 through 4 in the sentence (exclusive of 5). This helps you map tree nodes back to the text. |
         
         ### Color Spectrum Interpretation
         
-        - **Purple/Blue** nodes have lower values in the displayed semantic dimension
+        - **Purple/Blue** nodes have lower values in the principal semantic component
         - **Green/Yellow** nodes have higher values
-        - This dimension may represent features like entity vs. action, concreteness vs. abstractness, or other semantic properties
+        - This component represents the direction of maximum variance in the semantic space, capturing the most important semantic distinctions
         
         ### Visual Example
         
@@ -494,31 +494,10 @@ if init_complete:  # Only show content when initialization is complete
            - Different visualization modes highlight different aspects of meaning
            - The tree view emphasizes grammatical structure (subject-verb-object relationships)
            - The semantic space view reveals meaning relationships that may cross grammatical boundaries
-           - Example: In the hybrid view, you can see both how "quickly" modifies "ate" structurally AND their semantic relationship
+           - Example: In the Tree Structure + PCA view, you can see both how "quickly" modifies "ate" structurally AND their semantic relationship
         """)
 
-    with st.expander("Tree Structure + Semantic Dimensions (Visualization Guide)", expanded=False):
-        st.markdown("""
-        ## Tree Structure + Semantic Dimensions
-        
-        **What you're seeing:**
-        This visualization shows how meaning is structured within the grammar of a sentence. 
-        
-        **How it works:**
-        - The **X and Y positions** come directly from the first two dimensions of each node's semantic meaning
-        - The **Z position** (vertical) shows the grammatical depth in the tree
-        - **Node colors** represent another aspect of meaning (the third semantic dimension)
-        
-        **Why it's useful:**
-        This approach lets you see how meaning is built up through the grammatical structure. Words and phrases 
-        that have similar meanings will appear closer together on the X-Y plane, while their grammatical 
-        relationship is preserved vertically.
-        
-        **What to look for:**
-        - Similar words/phrases clustered together horizontally
-        - How meaning flows and transforms as you move up the tree
-        - Parent nodes that combine and abstract the meaning of their children
-        """)
+
 
     with st.expander("Pure Semantic Space (PCA) (Visualization Guide)", expanded=False):
         st.markdown("""
@@ -544,28 +523,28 @@ if init_complete:  # Only show content when initialization is complete
         - Outliers that carry unique meaning in the sentence
         """)
 
-    with st.expander("Hybrid View (Visualization Guide)", expanded=False):
+
+
+    with st.expander("Tree Structure + PCA (Visualization Guide)", expanded=False):
         st.markdown("""
-        ## Hybrid View
+        ## Tree Structure + PCA
         
         **What you're seeing:**
-        This visualization balances both grammar and meaning in one view.
+        This visualization combines the best of both worlds - showing semantic relationships while preserving some tree structure.
         
         **How it works:**
-        - The **X and Y positions** show semantic similarity between words/phrases
-        - The **Z position** (vertical) preserves the grammatical tree structure
-        - Nodes at the same height belong to the same grammatical level
-        - Similar meanings cluster together horizontally at each level
+        - The **X and Y positions** use PCA-reduced semantic dimensions (showing meaning relationships)
+        - The **Z position** (vertical) shows the grammatical depth in the tree
+        - **Node colors** represent the most important semantic variance (PCA component)
         
         **Why it's useful:**
-        This approach gives you the best of both worlds - you can see how meaning relates to structure.
-        It shows which parts of speech have similar meanings while maintaining the grammatical hierarchy.
+        This approach balances semantic clustering with structural hierarchy. You can see both how meanings relate 
+        to each other AND how they're organized grammatically.
         
         **What to look for:**
-        - How meaning clusters horizontally at each grammatical level
-        - The progression of meaning as you move up the tree
-        - Comparisons between phrases at the same grammatical level
-        - The relationship between a parent's meaning and its children's meanings
+        - Semantic clusters that span different tree levels
+        - How grammatical structure relates to semantic groupings
+        - The interplay between syntax and semantics in sentence meaning
         """)
 
     with st.expander("Root-Centric View (Visualization Guide)", expanded=False):
@@ -642,9 +621,9 @@ if init_complete:  # Only show content when initialization is complete
         - Patterns in how meaning is composed hierarchically
         
         **Note on colors:**
-        - Yellow/green shades indicate higher values in semantic dimension 3
+        - Yellow/green shades indicate higher values in the PCA component
         - Purple/blue shades indicate lower values
-        - This allows you to track one aspect of meaning throughout the tree structure
+        - This allows you to track the most important semantic variance throughout the tree structure
         """)
 
     # Check if sentence is too long
@@ -893,14 +872,14 @@ if init_complete:  # Only show content when initialization is complete
                     if processing_mode == "both":
                         st.markdown("""
                         This 3D visualization shows the tree structure with bidirectional semantic information:
-                        * Nodes are color-coded based on their semantic values
+                        * Nodes are color-coded based on PCA components (capturing the most important semantic variance)
                         * The representation combines both bottom-up and top-down processing
                         * This provides a richer view of the sentence structure and meaning
                         """)
                     elif processing_mode == "top-down":
                         st.markdown("""
                         This 3D visualization shows the tree structure with top-down semantic information:
-                        * Nodes are color-coded based on their semantic values
+                        * Nodes are color-coded based on PCA components (capturing the most important semantic variance)
                         * Information flows from the root node down to the leaves
                         * This highlights how context is distributed throughout the tree
                         
@@ -908,18 +887,18 @@ if init_complete:  # Only show content when initialization is complete
                         In this view, the root node is at the center, and other nodes are arranged by their semantic similarity to the root.
                         """)
                     else:
-                        st.markdown("""
-                        This 3D visualization shows the tree structure with semantic information:
-                        * Nodes are color-coded based on their semantic values
-                        * Information flows from the leaves up to the root
-                        * This highlights the compositional nature of the sentence
-                        """)
+                                            st.markdown("""
+                    This 3D visualization shows the tree structure with semantic information:
+                    * Nodes are color-coded based on PCA components (capturing the most important semantic variance)
+                    * Information flows from the leaves up to the root
+                    * This highlights the compositional nature of the sentence
+                    """)
                     
                     # Visualization options
                     if processing_mode == "top-down":
-                        viz_options = ["Tree Structure + Semantic Dimensions", "Pure Semantic Space (PCA)", "Hybrid View", "Root-Centric View"]
+                        viz_options = ["Pure Semantic Space (PCA)", "Tree Structure + PCA", "Root-Centric View"]
                     else:
-                        viz_options = ["Tree Structure + Semantic Dimensions", "Pure Semantic Space (PCA)", "Hybrid View"]
+                        viz_options = ["Pure Semantic Space (PCA)", "Tree Structure + PCA"]
                     
                     viz_mode = st.radio(
                         "Visualization Mode:",
@@ -929,9 +908,13 @@ if init_complete:  # Only show content when initialization is complete
                     )
                     
                     # Apply PCA for semantic dimensions if needed
-                    if viz_mode in ["Pure Semantic Space (PCA)", "Hybrid View"]:
-                        pca = PCA(n_components=3)
+                    if viz_mode in ["Pure Semantic Space (PCA)", "Tree Structure + PCA"]:
+                        pca = PCA(n_components=4)  # Get 4 components: 3 for position + 1 for color
                         semantic_coords = pca.fit_transform(vectors_array)
+                    else:
+                        # For Root-Centric view, still compute PCA for coloring
+                        pca = PCA(n_components=1)  # Just need 1 component for color
+                        pca_color_coords = pca.fit_transform(vectors_array)
                     
                     # Generate 3D coordinates for each node
                     x, y, z = [], [], []
@@ -953,14 +936,7 @@ if init_complete:  # Only show content when initialization is complete
                         parent_idx = info['parent_idx']
                         
                         # Determine position based on visualization mode
-                        if viz_mode == "Tree Structure + Semantic Dimensions":
-                            # Use tree structure for z, and semantic values for x, y
-                            # Scale semantic values to reasonable range
-                            pos_x = vec[0] * scale
-                            pos_y = vec[1] * scale
-                            pos_z = -level * 3  # Negative to make root at top
-                            
-                        elif viz_mode == "Pure Semantic Space (PCA)":
+                        if viz_mode == "Pure Semantic Space (PCA)":
                             # Use PCA-reduced dimensions
                             pos_x = semantic_coords[i, 0] * scale
                             pos_y = semantic_coords[i, 1] * scale
@@ -1004,13 +980,13 @@ if init_complete:  # Only show content when initialization is complete
                                 z.append(pos_z)
                                 labels.append(info['label'])
                                 
-                                # Determine color based on 3rd semantic dimension
-                                color_val = vec[2]
+                                # Determine color based on PCA component
+                                color_val = pca_color_coords[i, 0]  # Use first PCA component for color
                                 colors.append(color_val)
                                 
                                 continue
                             
-                        else:  # Hybrid View
+                        else:  # Tree Structure + PCA
                             # Use tree level for z but semantic values for x, y
                             pos_x = semantic_coords[i, 0] * scale
                             pos_y = semantic_coords[i, 1] * scale
@@ -1028,9 +1004,16 @@ if init_complete:  # Only show content when initialization is complete
                             size = 12  # Fixed size for all nodes
                             sizes.append(size)
                         
-                        # Determine color based on 3rd semantic dimension
-                        # Use a consistent dimension for coloring
-                        color_val = vec[2]
+                        # Determine color based on PCA component
+                        if viz_mode in ["Pure Semantic Space (PCA)", "Tree Structure + PCA"]:
+                            # Use 4th PCA component for color (if available, otherwise use 1st)
+                            if semantic_coords.shape[1] >= 4:
+                                color_val = semantic_coords[i, 3]  # 4th PCA component
+                            else:
+                                color_val = semantic_coords[i, 0]  # Fallback to 1st component
+                        else:
+                            # For Root-Centric view, use the dedicated PCA color component
+                            color_val = pca_color_coords[i, 0]
                         colors.append(color_val)
                         
                         # Add edge from parent node if exists and we haven't already done it
@@ -1075,7 +1058,7 @@ if init_complete:  # Only show content when initialization is complete
                             color=normalized_colors,
                             colorscale='Viridis',
                             opacity=0.8,
-                            colorbar=dict(title="Semantic Dimension 3")
+                            colorbar=dict(title="PCA Component" if viz_mode in ["Pure Semantic Space (PCA)", "Tree Structure + PCA"] else "PCA Component")
                         ),
                         # text= removed to avoid DOM issues
                         hovertext=[f"{l}<br>Hidden[0:3]=[{v[0]:.2f}, {v[1]:.2f}, {v[2]:.2f}]" 
@@ -1088,11 +1071,7 @@ if init_complete:  # Only show content when initialization is complete
                     axis_title_font = dict(size=14)
                     
                     # Different axis titles based on visualization mode
-                    if viz_mode == "Tree Structure + Semantic Dimensions":
-                        x_title = "Semantic Dimension 1"
-                        y_title = "Semantic Dimension 2"
-                        z_title = "Tree Level (Syntax)"
-                    elif viz_mode == "Pure Semantic Space (PCA)": 
+                    if viz_mode == "Pure Semantic Space (PCA)": 
                         x_title = "PCA Dimension 1"
                         y_title = "PCA Dimension 2"
                         z_title = "PCA Dimension 3"
@@ -1100,7 +1079,7 @@ if init_complete:  # Only show content when initialization is complete
                         x_title = "Semantic Distance from Root (X)"
                         y_title = "Semantic Distance from Root (Y)"
                         z_title = "Tree Level (Syntax)"
-                    else:  # Hybrid view
+                    else:  # Tree Structure + PCA
                         x_title = "Semantic PCA Dimension 1"
                         y_title = "Semantic PCA Dimension 2"
                         z_title = "Tree Level (Syntax)"
@@ -1369,27 +1348,33 @@ if init_complete:  # Only show content when initialization is complete
                         * Top-down: Information flows from root to leaves, distributing context to parts
                         * Combined: The shown values represent the combined bidirectional representation
                         
-                        Colors represent the semantic dimension (3) in the combined representation.
+                        Colors represent the most important semantic variance (PCA component) in the combined representation.
                         """)
                     elif processing_mode == "top-down":
                         st.markdown("""
                         This visualization shows the hierarchical structure of the parse tree with top-down processing.
                         Information flows from the root to the leaves, enabling context distribution from parent nodes to children.
                         
-                        Colors represent the semantic dimension (3) in the top-down representation.
+                        Colors represent the most important semantic variance (PCA component) in the top-down representation.
                         """)
                     else:
                         st.markdown("""
                         This visualization shows the hierarchical structure of the parse tree in a simplified format.
-                        Colors represent the same semantic dimension (3) used in the 3D visualization.
+                        Colors represent the same PCA component used in the 3D visualization.
                         """)
+                    
+                    # Compute PCA for consistent coloring with 3D visualization
+                    pca_structural = PCA(n_components=1)
+                    pca_color_values = pca_structural.fit_transform(vectors_array).flatten()
                     
                     # Create a simpler tree representation
                     with st.spinner("Building hierarchical tree data..."):
                         # First create a flattened representation with level info
                         flat_tree_data = []
+                        node_index = [0]  # Use list to make it mutable in nested function
                         
                         def traverse_tree(node, level=0, parent_label="Root"):
+                            
                             if node.get('h') is None:
                                 return
                                 
@@ -1412,8 +1397,9 @@ if init_complete:  # Only show content when initialization is complete
                                 if pos_tag:
                                     covered_text = f"{covered_text} ({pos_tag})"
                             
-                            # Get semantic value for coloring
-                            sem_value = node['h'][2] if node['h'] is not None else 0
+                            # Get semantic value for coloring using PCA component
+                            sem_value = pca_color_values[node_index[0]] if node_index[0] < len(pca_color_values) else 0
+                            node_index[0] += 1
                             
                             # Store node data
                             flat_tree_data.append({
@@ -1481,23 +1467,25 @@ if init_complete:  # Only show content when initialization is complete
                                 "Semantic Value": st.column_config.NumberColumn(
                                     "Semantic Value",
                                     format="%.3f",
-                                    help="Value of semantic dimension 3"
+                                    help="Value of the first PCA component (captures most semantic variance)"
                                 ),
                             },
                             use_container_width=True,
                             height=400
                         )
                         
-                        # Add explanation of semantic dimension 3
+                        # Add explanation of PCA semantic values
                         st.markdown("""
                         **Understanding Semantic Values:**
                         
-                        The "Semantic Value" shown above is the value of dimension 3 in each node's hidden state vector.
-                        This value represents a specific semantic feature that the Tree-LSTM has learned, which may relate to:
+                        The "Semantic Value" shown above is the value of the first PCA component of each node's hidden state vector.
+                        This component represents the direction of maximum variance in the semantic space, capturing:
                         
-                        - The grammatical role of the phrase
-                        - The semantic category (entity, action, property)
-                        - The level of abstraction or specificity
+                        - The most significant semantic distinctions in the sentence
+                        - Patterns that differentiate between different types of constituents
+                        - The primary axis along which semantic meaning varies
+                        
+                        This is more meaningful than arbitrary neural network dimensions as it represents the most important semantic patterns.
                         """)
                         
                         # Also show a more visually compelling tree representation
@@ -1545,7 +1533,7 @@ if init_complete:  # Only show content when initialization is complete
                                 )
                         
                         # Also create a simple bar chart showing semantic values by level
-                        st.markdown("### Semantic Values by Tree Depth")
+                        st.markdown("### PCA Semantic Values by Tree Depth")
                         
                         # Group data by level
                         level_groups = {}
@@ -1569,16 +1557,16 @@ if init_complete:  # Only show content when initialization is complete
                             marker=dict(
                                 color=avg_values,
                                 colorscale='Viridis',
-                                colorbar=dict(title="Avg. Semantic Value")
+                                colorbar=dict(title="Avg. PCA Value")
                             ),
                             text=[f"{val:.3f}" for val in avg_values],
                             textposition='auto'
                         ))
                         
                         fig.update_layout(
-                            title="Average Semantic Value by Tree Depth",
+                            title="Average PCA Semantic Value by Tree Depth",
                             xaxis_title="Tree Level",
-                            yaxis_title="Average Semantic Value",
+                            yaxis_title="Average PCA Value",
                             height=400
                         )
                         
@@ -1590,10 +1578,10 @@ if init_complete:  # Only show content when initialization is complete
                         
                         st.markdown("""
                         **Interpreting the Chart:**
-                        - This chart shows how semantic values in dimension 3 change as you move deeper into the tree
-                        - Higher bars indicate levels with higher average semantic values
-                        - This pattern reveals how this specific semantic feature is distributed across syntactic levels
-                        - Typically, we might expect certain syntactic levels to consistently encode particular semantic features
+                        - This chart shows how the first PCA component values change as you move deeper into the tree
+                        - Higher bars indicate levels with higher average values along the primary semantic axis
+                        - This pattern reveals how the most important semantic variance is distributed across syntactic levels
+                        - Different syntactic levels may encode different aspects of the primary semantic distinction
                         """)
                     
                     else:

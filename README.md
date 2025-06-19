@@ -21,9 +21,8 @@ This project provides an intuitive interface for exploring how distributed seman
   - Top-down: Information flows from root to leaves (contextual distribution)
   - Bidirectional: Combines both approaches for richer representations
 - **Interactive 3D Visualization** with multiple views:
-  - Tree Structure + Semantic Dimensions
   - Pure Semantic Space (PCA)
-  - Hybrid View
+  - Tree Structure + PCA
   - Root-Centric View (for top-down processing)
 - **Semantic Insights**: Node position, size, and color convey semantic information
 - **Comparative Analysis**: Explore how different processing directions affect semantic representations
@@ -71,9 +70,8 @@ The application lets you choose from three processing modes:
 
 ## Visualization Modes
 
-- **Tree Structure + Semantic Dimensions**: Shows grammatical structure with semantic dimensions for X and Y positions
 - **Pure Semantic Space (PCA)**: Visualizes semantic relationships in pure 3D space using PCA
-- **Hybrid View**: Balances grammatical structure with semantic relationships
+- **Tree Structure + PCA**: Balances grammatical structure with semantic relationships using PCA-reduced dimensions
 - **Root-Centric View** (for top-down mode): Shows how information radiates from the root node
 
 ## Technical Details
