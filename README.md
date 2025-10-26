@@ -2,6 +2,10 @@
 
 An interactive tool for visualizing compositional semantics through constituency parse trees and Tree-LSTM networks. This project includes visualization capabilities for bottom-up, top-down, and bidirectional Tree-LSTM models.
 
+You can also view it on this link: https://lstm-tree-generator.streamlit.app/
+
+(note I am not paying for premium lol, so might take a few minutes for the instance to 'wake up')
+
 ## Overview
 
 This project provides an intuitive interface for exploring how distributed semantic representations are composed in Tree-structured LSTMs, combining:
