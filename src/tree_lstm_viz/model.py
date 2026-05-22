@@ -155,11 +155,8 @@ class TreeLSTMEncoder:
             # Load spaCy model
             self.nlp = spacy.load('en_core_web_sm')
             
-            # Setup Benepar in the spaCy pipeline with robust error handling
+            # Setup Benepar in the spaCy pipeline (downloads model if needed)
             self.nlp = self.benepar_helper.setup_spacy_pipeline(self.nlp)
-            
-            # Download the Benepar model if needed
-            self.benepar_helper.download_model()
             
             # Load BERT for token embeddings
             app_logger.info("Loading BERT model and tokenizer...")

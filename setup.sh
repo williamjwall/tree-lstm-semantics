@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# This script runs during Streamlit Cloud deployment to set up the environment
+# Local/manual setup only. Streamlit Community Cloud does NOT run this script;
+# it only installs requirements.txt and packages.txt. Model downloads happen at app startup.
 
 echo "Running setup.sh"
 

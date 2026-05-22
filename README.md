@@ -95,11 +95,39 @@ The processing pipeline:
 - **TopDownTreeLSTM**: Implements the top-down approach with a single forget gate for parent influence
 - **BidirectionalTreeLSTMEncoder**: Combines both approaches through element-wise addition
 
+## Streamlit Cloud (hosted deploy)
+
+This app is meant to run on [Streamlit Community Cloud](https://lstm-tree-generator.streamlit.app/) (or your own Cloud app). You do **not** need to run it locally.
+
+**What Cloud does automatically**
+
+- `pip install -r requirements.txt` (including `transformers<5`, which Benepar needs)
+- `packages.txt` system packages (graphviz, build tools)
+- Python version from `runtime.txt` (`python-3.10`)
+
+**What Cloud does *not* run**
+
+- `setup.sh` — models are downloaded when the app starts (parser + BERT on the loading screen)
+
+**After you fix the repo**
+
+1. Push changes to the GitHub repo connected to your Cloud app.
+2. Wait for the deploy to finish (Manage app → logs).
+3. Open the app; the **first load after deploy or wake-up** can take several minutes while models download.
+4. Free tier: keep sentences short; bidirectional mode uses more RAM. If the app reboots, it may need to download again.
+
+**If you still see “No constituency parse”**
+
+- Confirm `requirements.txt` contains `transformers>=4.30.0,<5.0.0` and redeploy.
+- Reboot the app from the Cloud dashboard (⋮ → Reboot app).
+- Check deploy logs for `transformers` 5.x or Benepar download errors.
+
 ## Troubleshooting
 
 - **Memory Issues**: For systems with limited RAM, try shorter sentences
 - **Parsing Errors**: Complex sentences may cause parser issues; try simpler alternatives
 - **Missing Libraries**: Ensure all dependencies are installed (`pip install -r requirements.txt`)
+- **"No constituency parse" / Benepar init failed**: Requires `transformers<5` in `requirements.txt` on Streamlit Cloud; parser model downloads on first app start
 
 ## License
 

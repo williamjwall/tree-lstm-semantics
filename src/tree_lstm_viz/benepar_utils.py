@@ -149,28 +149,38 @@ class BeneparHelper:
         
         Returns:
             The modified nlp pipeline
+        
+        Raises:
+            RuntimeError: If Benepar cannot be added or constituency parsing fails
         """
+        # Import registers the spaCy "benepar" factory
+        import benepar  # noqa: F401
+
+        if not self.ensure_benepar_installed():
+            raise RuntimeError("Benepar is not installed")
+
+        if not self.download_model():
+            raise RuntimeError(
+                f"Benepar model '{self.model_name}' is not available. "
+                "Run: python -c \"import benepar; benepar.download('benepar_en3')\""
+            )
+
+        if 'benepar' in nlp.pipe_names:
+            app_logger.info("Benepar already in spaCy pipeline")
+            return nlp
+
         try:
-            import spacy
-            import benepar
-            
-            if 'benepar' not in nlp.pipe_names:
-                nlp.add_pipe('benepar', config={'model': self.model_name})
-                app_logger.info("Added benepar to spaCy pipeline")
-                
-                # Test with a simple sentence to verify it works
-                doc = nlp("This is a test sentence.")
-                sent = list(doc.sents)[0]
-                
-                if hasattr(sent._, 'parse_string'):
-                    app_logger.info("Benepar parse tree generation working correctly")
-                else:
-                    app_logger.warning("Benepar added to pipeline but parse_string attribute not available")
-            else:
-                app_logger.info("Benepar already in spaCy pipeline")
-                
+            nlp.add_pipe('benepar', config={'model': self.model_name})
+            app_logger.info("Added benepar to spaCy pipeline")
+
+            # Verify constituency parse is available
+            doc = nlp("This is a test sentence.")
+            sent = list(doc.sents)[0]
+            _ = list(sent._.children)
+            app_logger.info("Benepar parse tree generation working correctly")
         except Exception as e:
             app_logger.error(f"Failed to add Benepar to spaCy pipeline: {str(e)}")
             app_logger.debug(traceback.format_exc())
-        
+            raise RuntimeError(f"Failed to set up Benepar: {e}") from e
+
         return nlp 

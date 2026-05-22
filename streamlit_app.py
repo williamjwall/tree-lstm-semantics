@@ -154,6 +154,15 @@ except ImportError as e:
 try:
     import transformers
     transformers.logging.set_verbosity_error()
+    # benepar_en3 breaks on transformers 5.x (Streamlit installs from requirements.txt only)
+    _tf_major = int(transformers.__version__.split(".")[0])
+    if _tf_major >= 5:
+        st.error(
+            "Incompatible transformers version for Benepar. "
+            "Redeploy with `transformers>=4.30.0,<5.0.0` in requirements.txt "
+            f"(installed: {transformers.__version__})."
+        )
+        st.stop()
 except ImportError:
     pass  # transformers not installed
 
@@ -170,28 +179,16 @@ def load_nlp_pipeline():
         try:
             nlp = spacy.load("en_core_web_sm")
             
-            # Add benepar component if available with less verbosity
-            try:
-                # First try to use our new BeneparHelper if available
-                if structured_logging:
+            # Add benepar component (registers factory on import; needs model on disk)
+            if BeneparHelper is not None:
+                try:
                     helper = BeneparHelper('benepar_en3')
                     nlp = helper.setup_spacy_pipeline(nlp)
-                else:
-                    # Fall back to old implementation
-                    if "benepar" not in nlp.pipe_names:
-                        try:
-                            nlp.add_pipe("benepar", config={"model": "benepar_en3"})
-                        except Exception:
-                            # Reduced verbosity - silent error handling
-                            try:
-                                import benepar
-                                benepar.download('benepar_en3')
-                                nlp.add_pipe("benepar", config={"model": "benepar_en3"})
-                            except:
-                                pass
-            except:
-                # Reduced verbosity - silent handling
-                pass
+                except Exception as e:
+                    msg = f"Benepar pipeline setup failed: {e}"
+                    if structured_logging:
+                        logger.warning(msg)
+                    st.sidebar.warning(msg)
             
             return nlp
         except Exception:
@@ -206,58 +203,58 @@ src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
-# Try to import our new logger and BeneparHelper
+# Try to import logger and BeneparHelper
+structured_logging = False
 try:
     from src.tree_lstm_viz.logger import setup_logger, log_dependency_status, log_model_status
-    from src.tree_lstm_viz.benepar_utils import BeneparHelper
-    
-    # Set up logger
     logger = setup_logger('streamlit_app')
     structured_logging = True
     logger.info("Starting Tree-LSTM Visualizer")
 except ImportError:
-    structured_logging = False
+    logger = None
 
-# Try to download benepar model if needed - simplified logging
 try:
-    # First try to use our new BeneparHelper
-    if structured_logging:
-        logger.info("Setting up Benepar using BeneparHelper")
+    from src.tree_lstm_viz.benepar_utils import BeneparHelper
+except ImportError:
+    BeneparHelper = None
+
+# Download models at startup (Streamlit Cloud does not run setup.sh — only requirements.txt)
+try:
+    if BeneparHelper is not None:
+        if structured_logging:
+            logger.info("Setting up Benepar using BeneparHelper")
         helper = BeneparHelper('benepar_en3')
-        benepar_installed = helper.ensure_benepar_installed()
-        
-        # Check if model is downloaded
-        model_downloaded, model_path = helper.is_model_downloaded()
+        helper.ensure_benepar_installed()
+        model_downloaded, _ = helper.is_model_downloaded()
         if not model_downloaded:
-            st.sidebar.info("Downloading benepar model...")
-            helper.download_model()
-        update_progress("benepar")
+            status_text.markdown(
+                "<div style='text-align: center; color: #4a86e8; font-size: 16px; margin-top: 10px; font-weight: 500;'>"
+                "Downloading parser model (first deploy may take a few minutes)...</div>",
+                unsafe_allow_html=True,
+            )
+            if not helper.download_model():
+                raise RuntimeError("benepar_en3 download failed")
     else:
-        # Fall back to old implementation
-        import nltk
         import benepar
-        
-        # Check if model exists and download if needed
-        model_exists = False
-        try:
-            import benepar.download as benepar_download
-            for path in benepar_download._get_download_dir():
-                model_path = os.path.join(path, "benepar_en3")
-                if os.path.exists(model_path):
-                    model_exists = True
-                    break
-        except Exception as e:
-            pass
-        
-        if not model_exists:
-            st.sidebar.info("Downloading benepar model...")
-            try:
-                benepar.download('benepar_en3')
-            except Exception as e:
-                st.sidebar.error(f"Error downloading benepar model: {str(e)}")
-        update_progress("benepar")
+        benepar.download('benepar_en3')
+
+    # Pre-download BERT so encoder init does not fail mid-load on Community Cloud
+    from transformers import BertModel, BertTokenizer
+    status_text.markdown(
+        "<div style='text-align: center; color: #4a86e8; font-size: 16px; margin-top: 10px; font-weight: 500;'>"
+        "Downloading BERT weights...</div>",
+        unsafe_allow_html=True,
+    )
+    BertTokenizer.from_pretrained('bert-base-uncased')
+    BertModel.from_pretrained('bert-base-uncased')
+    update_progress("benepar")
 except Exception as e:
-    st.sidebar.warning(f"Benepar not available: {str(e)}")
+    st.error(f"Model setup failed (parser or BERT): {e}")
+    st.info(
+        "On Streamlit Cloud, push the latest `requirements.txt` (with `transformers<5`) "
+        "and reboot the app. First wake-up can take several minutes."
+    )
+    st.stop()
 
 # Update progress for NLP pipeline
 update_progress("nlp_pipeline")

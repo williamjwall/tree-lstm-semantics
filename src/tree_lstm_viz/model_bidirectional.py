@@ -252,30 +252,17 @@ class BidirectionalTreeLSTMEncoder:
             app_logger.info(f"Running on: {self.device}")
             app_logger.info(f"Using Tree-LSTM mode: {mode}")
         
-        # Initialize Benepar helper
-        if structured_logging:
-            self.benepar_helper = BeneparHelper('benepar_en3')
-            # Ensure Benepar is installed
-            self.benepar_helper.ensure_benepar_installed()
+        # Initialize Benepar helper (required for constituency parsing)
+        self.benepar_helper = BeneparHelper('benepar_en3')
+        self.benepar_helper.ensure_benepar_installed()
         
         # Load models
         try:
             # Load spaCy model
             self.nlp = spacy.load('en_core_web_sm')
             
-            # Setup Benepar in the spaCy pipeline with robust error handling
-            if structured_logging:
-                self.nlp = self.benepar_helper.setup_spacy_pipeline(self.nlp)
-                # Download the Benepar model if needed
-                self.benepar_helper.download_model()
-            else:
-                # Fallback method for adding Benepar
-                try:
-                    import benepar
-                    if "benepar" not in self.nlp.pipe_names:
-                        self.nlp.add_pipe("benepar", config={"model": "benepar_en3"})
-                except Exception as e:
-                    print(f"Error setting up Benepar: {str(e)}")
+            # Setup Benepar in the spaCy pipeline (downloads model if needed)
+            self.nlp = self.benepar_helper.setup_spacy_pipeline(self.nlp)
             
             # Load BERT for token embeddings
             if structured_logging:
