@@ -128,6 +128,7 @@ This app is meant to run on [Streamlit Community Cloud](https://lstm-tree-genera
 - **Parsing Errors**: Complex sentences may cause parser issues; try simpler alternatives
 - **Missing Libraries**: Ensure all dependencies are installed (`pip install -r requirements.txt`)
 - **"No constituency parse" / Benepar init failed**: Requires `transformers<5` in `requirements.txt` on Streamlit Cloud; parser model downloads on first app start
+- **`ModuleNotFoundError: No module named 'torchvision'`**: Add `torchvision>=0.15.0` to `requirements.txt` and redeploy (Streamlit's watcher imports optional transformers vision modules)
 
 ## License
 
