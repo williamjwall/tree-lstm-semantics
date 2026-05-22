@@ -153,6 +153,33 @@ class BeneparHelper:
         Raises:
             RuntimeError: If Benepar cannot be added or constituency parsing fails
         """
+        # CPU-only hosts (e.g. Streamlit Cloud): CUDA wheels + recent transformers can
+        # leave Benepar's T5 submodule on PyTorch "meta" device and fail at first parse.
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+
+        import torch
+        from transformers import AutoConfig, AutoModel
+
+        _original_from_config = AutoModel.from_config
+
+        def _from_config_materialized(config, *args, **kwargs):
+            model = _original_from_config(config, *args, **kwargs)
+            try:
+                return model.to(torch.device("cpu"))
+            except NotImplementedError:
+                model_path = getattr(config, "_name_or_path", None) or getattr(
+                    config, "name_or_path", None
+                )
+                if model_path and os.path.isdir(str(model_path)):
+                    return AutoModel.from_pretrained(
+                        model_path,
+                        torch_dtype=torch.float32,
+                        low_cpu_mem_usage=False,
+                    )
+                raise
+
+        AutoModel.from_config = _from_config_materialized
+
         # Import registers the spaCy "benepar" factory
         import benepar  # noqa: F401
 
@@ -172,6 +199,13 @@ class BeneparHelper:
         try:
             nlp.add_pipe('benepar', config={'model': self.model_name})
             app_logger.info("Added benepar to spaCy pipeline")
+
+            # Keep parser on CPU even if a CUDA build of torch is installed
+            benepar_pipe = nlp.get_pipe("benepar")
+            parser = getattr(benepar_pipe, "_parser", None)
+            if parser is not None:
+                parser.cpu()
+                parser.eval()
 
             # Verify constituency parse is available
             doc = nlp("This is a test sentence.")

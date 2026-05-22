@@ -1,16 +1,19 @@
-import streamlit as st
-import json
-import graphviz
-import torch
 import os
 import sys
 import warnings
 import time
 import traceback
 
-# Silence all warnings including from transformers
-warnings.filterwarnings('ignore')
-os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
+# Streamlit Cloud is CPU-only: force CPU before torch/transformers load (avoids meta-tensor Benepar failures)
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
+
+warnings.filterwarnings("ignore")
+
+import streamlit as st
+import json
+import graphviz
+import torch
 
 # Set NLTK_DATA environment variable
 nltk_data_dir = os.path.expanduser('~/nltk_data')

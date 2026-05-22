@@ -129,6 +129,7 @@ This app is meant to run on [Streamlit Community Cloud](https://lstm-tree-genera
 - **Missing Libraries**: Ensure all dependencies are installed (`pip install -r requirements.txt`)
 - **"No constituency parse" / Benepar init failed**: Requires `transformers<5` in `requirements.txt` on Streamlit Cloud; parser model downloads on first app start
 - **`ModuleNotFoundError: No module named 'torchvision'`**: Add `torchvision>=0.15.0` to `requirements.txt` and redeploy (Streamlit's watcher imports optional transformers vision modules)
+- **`Cannot copy out of meta tensor; no data!` (Benepar)**: Use CPU PyTorch wheels and `transformers<4.46` in `requirements.txt` (see current file); redeploy and reboot the app
 
 ## License
 
